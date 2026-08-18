@@ -76,3 +76,5 @@ Milestone 2 foundation: embedded HTTP API and loopback Direct Play.
 ## Next Major Goal
 
 Plan LS-024 same-origin static browser UI hosting while preserving loopback-only startup and every remaining LAN gate.
+
+The dependency-ordered remaining backlog is maintained in [IMPLEMENTATION_ROADMAP.md](IMPLEMENTATION_ROADMAP.md). The committed completion target is the release-ready desktop LAN MVP through LS-060; post-MVP work is gated and must not silently resolve deferred architecture decisions.

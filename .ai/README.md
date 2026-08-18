@@ -4,6 +4,7 @@ The `.ai` directory contains concise operational memory that lets an AI agent sa
 
 - `PROJECT_STATUS.md`: canonical project-wide implementation status.
 - `CURRENT_TASK.md`: the single active task, its evidence, assumptions, and next action.
+- `IMPLEMENTATION_ROADMAP.md`: dependency-ordered permanent LS backlog.
 - `KNOWN_ISSUES.md`: confirmed or strongly identified bugs only.
 - `TECH_DEBT.md`: working implementation that should later improve.
 - `DEFERRED_DECISIONS.md`: intentionally postponed decisions and their reopening triggers.

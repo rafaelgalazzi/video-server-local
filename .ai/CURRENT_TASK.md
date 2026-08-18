@@ -63,4 +63,4 @@ Harden the separate HTTPS lifecycle with strict request authority/origin and Fet
 
 ## Next Exact Step
 
-Plan LS-024 same-origin static browser UI hosting without changing the active desktop listener or enabling LAN binding.
+Start LS-024 using the scope and completion evidence in `.ai/IMPLEMENTATION_ROADMAP.md`: same-origin static browser UI hosting without changing the active desktop listener or enabling LAN binding.
