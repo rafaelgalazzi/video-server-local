@@ -35,8 +35,11 @@ Do not expose raw filesystem paths. Public media access must use opaque identifi
 
 ## Planned
 
-- Authentication and pairing routes.
+- Expiring, rate-limited pairing request/confirmation routes with explicit local approval.
+- Bearer authentication and `library.read` authorization for every LAN library/stream route.
 - Static browser UI hosting.
 - Event transport.
 
 Planned routes are not contracts until implemented, tested, and recorded here.
+
+The core can issue and revoke peer bearer credentials, but no credential API is exposed. ADR-0006 prohibits transmitting these credentials over plaintext LAN HTTP or changing the bind address before the complete pairing, encrypted transport, and route-authorization gates are satisfied.

@@ -1875,10 +1875,13 @@ name = "localstream-core"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "base64 0.22.1",
+ "getrandom 0.3.4",
  "http-body-util",
  "rusqlite",
  "serde",
  "serde_json",
+ "sha2",
  "tempfile",
  "thiserror 2.0.20",
  "tokio",

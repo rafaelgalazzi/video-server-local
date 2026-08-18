@@ -25,14 +25,16 @@ Milestone 2 foundation: embedded HTTP API and loopback Direct Play.
 - Loopback-only opaque-ID Direct Play with containment validation, HTTP single-range responses, bounded asynchronous I/O, and an eight-stream concurrency limit.
 - Vue displays the actual loopback API address and exposure status.
 - Vue media rows can open an accessible native-controls player using the versioned opaque-ID stream URL, with loading and compatibility-error states.
+- Core peer credentials use 256-bit OS randomness, digest-only SQLite persistence, explicit `library.read` capability, restart-safe authentication, and revocation.
+- ADR-0006 and the security threat model define pairing, encrypted transport, authorization, rate-limit, and revocation gates that must precede LAN binding.
 
 ## In Progress
 
-- Nothing. LS-006 is complete; its interactive Windows playback check remains unverified and documented.
+- Nothing. LS-007 is complete; pairing protocol and LAN exposure remain gated by ADR-0006.
 
 ## Not Started
 
-- Pairing/authentication and safe LAN binding.
+- User-approved pairing, HTTP authorization middleware, encrypted transport, and safe LAN binding.
 - Web UI hosting for remote browser clients.
 - Node discovery, pairing, trust, and distributed libraries.
 - FFmpeg probing/transcoding and concurrency management.
@@ -47,8 +49,9 @@ Milestone 2 foundation: embedded HTTP API and loopback Direct Play.
 - HTTP and Direct Play are loopback-only on an ephemeral port until pairing/authentication is implemented.
 - Direct Play supports one byte range per request; multipart ranges and conditional caching are not implemented.
 - Playback compatibility is delegated to the embedded browser; ffprobe metadata and transcoding fallback are not implemented.
+- Peer credential mechanics are core-only; there are no pairing endpoints, approval UI, client secret storage, or authenticated LAN routes.
 - The repository has no commits; all current files are untracked at the time of this inspection.
 
 ## Next Major Goal
 
-Define LS-007 for pairing/authentication foundations and threat modeling before LAN exposure.
+Define LS-008 for expiring, replay-resistant, explicitly approved pairing requests while retaining loopback-only binding.

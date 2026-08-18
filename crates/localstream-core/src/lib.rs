@@ -1,6 +1,7 @@
 use serde::Serialize;
 use thiserror::Error;
 
+pub mod auth;
 mod database;
 pub mod media;
 pub mod server;
@@ -93,6 +94,24 @@ impl LocalStreamCore {
             .try_acquire_owned()
             .map_err(|_| streaming::StreamingError::Busy)?;
         streaming::open_direct_play(location, permit).await
+    }
+
+    pub fn issue_peer_credential(
+        &self,
+        display_name: &str,
+    ) -> Result<auth::IssuedCredential, auth::AuthError> {
+        auth::issue_credential(&self.database, display_name)
+    }
+
+    pub fn authenticate_peer(
+        &self,
+        bearer_token: Option<&str>,
+    ) -> Result<auth::TrustedPeer, auth::AuthError> {
+        auth::authenticate(&self.database, bearer_token)
+    }
+
+    pub fn revoke_peer(&self, peer_id: &str) -> Result<bool, auth::AuthError> {
+        self.database.revoke_peer(peer_id).map_err(Into::into)
     }
 }
 
@@ -195,5 +214,91 @@ mod tests {
         core.open_direct_play(id)
             .await
             .expect("released capacity should be reusable");
+    }
+
+    #[test]
+    fn issues_authenticates_and_revokes_a_peer_credential() {
+        let core = LocalStreamCore::in_memory().expect("in-memory core should open");
+        let issued = core
+            .issue_peer_credential("Living Room TV")
+            .expect("credential should issue");
+
+        assert!(issued.bearer_token.starts_with("ls_peer_"));
+        assert_eq!(issued.peer.display_name, "Living Room TV");
+        assert!(matches!(
+            issued.peer.capability,
+            crate::auth::PeerCapability::LibraryRead
+        ));
+        assert!(matches!(
+            core.authenticate_peer(None),
+            Err(crate::auth::AuthError::MissingCredential)
+        ));
+        assert!(matches!(
+            core.authenticate_peer(Some("ls_peer_invalid")),
+            Err(crate::auth::AuthError::InvalidCredential)
+        ));
+
+        let authenticated = core
+            .authenticate_peer(Some(&issued.bearer_token))
+            .expect("issued credential should authenticate");
+        assert_eq!(authenticated, issued.peer);
+
+        assert!(core
+            .revoke_peer(&issued.peer.id)
+            .expect("revocation should persist"));
+        assert!(matches!(
+            core.authenticate_peer(Some(&issued.bearer_token)),
+            Err(crate::auth::AuthError::RevokedCredential)
+        ));
+        assert!(!core
+            .revoke_peer(&issued.peer.id)
+            .expect("repeat revocation should be safe"));
+    }
+
+    #[test]
+    fn peer_credential_and_revocation_survive_restart_without_plaintext_storage() {
+        let workspace = tempdir().expect("temporary workspace should be created");
+        let database = workspace.path().join("localstream.sqlite3");
+        let (peer_id, token) = {
+            let core = LocalStreamCore::open(&database).expect("database should open");
+            let issued = core
+                .issue_peer_credential("Bedroom Tablet")
+                .expect("credential should issue");
+            (issued.peer.id, issued.bearer_token)
+        };
+
+        {
+            let core = LocalStreamCore::open(&database).expect("database should reopen");
+            core.authenticate_peer(Some(&token))
+                .expect("credential should survive restart");
+            assert!(core.revoke_peer(&peer_id).expect("peer should revoke"));
+        }
+
+        let core = LocalStreamCore::open(&database).expect("database should reopen again");
+        assert!(matches!(
+            core.authenticate_peer(Some(&token)),
+            Err(crate::auth::AuthError::RevokedCredential)
+        ));
+        let database_bytes = fs::read(database).expect("database should be readable");
+        assert!(!database_bytes
+            .windows(token.len())
+            .any(|window| window == token.as_bytes()));
+    }
+
+    #[test]
+    fn rejects_invalid_peer_display_names() {
+        let core = LocalStreamCore::in_memory().expect("in-memory core should open");
+        assert!(matches!(
+            core.issue_peer_credential("   "),
+            Err(crate::auth::AuthError::InvalidDisplayName)
+        ));
+        assert!(matches!(
+            core.issue_peer_credential(&"x".repeat(101)),
+            Err(crate::auth::AuthError::InvalidDisplayName)
+        ));
+        assert!(matches!(
+            core.issue_peer_credential("Living\nRoom"),
+            Err(crate::auth::AuthError::InvalidDisplayName)
+        ));
     }
 }

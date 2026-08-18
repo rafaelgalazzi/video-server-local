@@ -35,3 +35,4 @@ Proposed / Accepted / Superseded / Rejected
 - [ADR-0003 — Axum local HTTP server](0003-axum-local-http-server.md)
 - [ADR-0004 — SQLite local database](0004-sqlite-local-database.md)
 - [ADR-0005 — Direct Play first](0005-direct-play-first.md)
+- [ADR-0006 — Revocable peer bearer credentials](0006-revocable-peer-credentials.md)

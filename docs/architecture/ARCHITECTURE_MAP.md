@@ -22,7 +22,7 @@ LocalStream is planned as a local-first system with a Vue interface and thin tra
         SQLite         FFmpeg           mDNS
 ```
 
-The Vue/Tauri adapters, shared Rust core, library scanning, SQLite persistence, loopback Axum API, and bounded Direct Play streaming exist. Playback UI, FFmpeg, mDNS, pairing, and LAN exposure remain target design.
+The Vue/Tauri adapters, shared Rust core, library scanning, SQLite persistence, loopback Axum API, bounded Direct Play streaming, playback UI, and revocable peer credential core exist. FFmpeg, mDNS, user-approved pairing, route authorization, encrypted LAN transport, and LAN exposure remain target design.
 
 ## Responsibilities
 

@@ -6,7 +6,7 @@ Provide framework-independent LocalStream domain services reusable by Tauri, HTT
 
 ## Features
 
-The crate exposes application identity information, scans explicitly approved video-library directories, persists the current library in SQLite, opens containment-checked Direct Play sources, and hosts thin versioned Axum HTTP adapters.
+The crate exposes application identity information, scans explicitly approved video-library directories, persists the current library in SQLite, opens containment-checked Direct Play sources, manages revocable peer credentials, and hosts thin versioned Axum HTTP adapters.
 
 ## Important Files
 
@@ -15,6 +15,7 @@ The crate exposes application identity information, scans explicitly approved vi
 - `src/database/`: SQLite schema, snapshot persistence, and restoration.
 - `src/server/`: Axum router, loopback lifecycle, and API contracts.
 - `src/streaming/`: opaque-ID resolution, containment checks, and byte ranges.
+- `src/auth/`: secure peer credential issuance, authentication, and revocation.
 
 ## Public Interfaces
 
@@ -25,6 +26,7 @@ The crate exposes application identity information, scans explicitly approved vi
 - `LocalStreamCore::current_library`: safe persisted-library view.
 - `server::start_local_server`: embedded loopback HTTP lifecycle.
 - `LocalStreamCore::open_direct_play`: bounded Direct Play source resolution.
+- `LocalStreamCore` peer credential issuance, authentication, and revocation methods.
 
 ## Dependencies
 
@@ -32,7 +34,7 @@ Axum and Tokio for the embedded server, bundled SQLite through rusqlite, Serde f
 
 ## Current Limitations
 
-LAN binding, authentication, compatibility inspection, audio, discovery, playback UI, and FFmpeg services are not implemented. Direct Play supports single byte ranges and eight concurrent loopback streams. Rescans currently replace a complete library snapshot.
+Remote pairing, LAN authorization middleware/binding, compatibility inspection, audio, discovery, and FFmpeg services are not implemented. The credential core exists but must not be used over plaintext LAN HTTP. Direct Play supports single byte ranges and eight concurrent loopback streams. Rescans currently replace a complete library snapshot.
 
 ## Planned Work
 

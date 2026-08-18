@@ -29,8 +29,8 @@ Axum and Tokio. Handlers call `LocalStreamCore` rather than duplicating domain/d
 
 ## Current Limitations
 
-The server is deliberately unreachable from other LAN devices. Pairing/authentication, configurable LAN binding, static web hosting, CORS policy, and request rate limiting are not implemented. Direct Play is limited to eight concurrent streams.
+The server is deliberately unreachable from other LAN devices. The core has revocable credential mechanics, but pairing approval, authentication middleware, encrypted transport, configurable LAN binding, static web hosting, CORS policy, and request rate limiting are not implemented. Direct Play is limited to eight concurrent streams.
 
 ## Planned Work
 
-Add a playback UI while remaining loopback-only, then add pairing and authentication before enabling LAN binding.
+Add expiring user-approved pairing and route authorization while remaining loopback-only. Satisfy every ADR-0006 gate before enabling LAN binding.

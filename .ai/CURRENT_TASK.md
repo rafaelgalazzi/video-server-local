@@ -2,11 +2,11 @@
 
 ## ID
 
-LS-006
+LS-007
 
 ## Title
 
-Vue Direct Play interface
+Revocable peer credential foundation and threat model
 
 ## Status
 
@@ -14,53 +14,55 @@ Completed
 
 ## Goal
 
-Let a desktop user select an indexed video and play it through the embedded loopback Direct Play endpoint without exposing filesystem paths or moving networking logic into presentation components.
+Establish secure, persisted, revocable peer credentials and an explicit trust model in the reusable Rust core without exposing an incomplete pairing protocol or enabling LAN binding.
 
 ## Acceptance Criteria
 
-- Indexed media rows expose an accessible Play action.
-- A playback composable owns the selected item, stream URL, and idle/loading/playing/error state.
-- Stream URLs use `ServerInfo.baseUrl`, the versioned route, and encoded opaque media IDs only.
-- Playback is disabled with clear feedback while the embedded API is unavailable.
-- A dedicated component renders native video controls plus selected-title, loading, error, and close states.
-- Changing libraries clears stale playback state.
-- Composable tests cover URL generation, unavailable-server behavior, event states, and reset behavior.
-- Frontend and project documentation are current.
+- The core can issue a cryptographically random bearer credential only through a trusted local call.
+- Plaintext credentials are returned once and never persisted; SQLite stores a SHA-256 digest and safe peer metadata.
+- Credentials carry an explicit initial `library.read` capability.
+- Authentication distinguishes trusted, missing/invalid, and revoked credentials without exposing secrets.
+- Revocation persists across core restarts and prevents future authentication.
+- Database schema migration from version 1 to version 2 preserves existing library data.
+- Tests cover issuance, valid/invalid authentication, revocation, restart persistence, and schema migration.
+- An accepted ADR and security threat model document credential lifecycle, trust boundaries, route policy, transport limitations, and LAN bind gates.
+- The HTTP listener remains loopback-only and existing routes remain unchanged for the desktop client.
 
 ## Completed
 
-- Added `usePlayback` for selected media, encoded versioned stream URLs, API availability, and playback event state.
-- Added four deterministic composable tests covering URL generation, unavailable API behavior, playing/error transitions, and reset.
-- Added an accessible native-controls `PlaybackPanel` with loading, compatibility error, and close states.
-- Added API-aware Play buttons to indexed media rows and clear disabled feedback before the private API is ready.
-- Integrated playback into `App.vue` and clear stale playback whenever library selection begins or the selected item leaves the restored library.
-- Updated frontend, project, and root documentation.
+- Added 256-bit OS-random, URL-safe peer bearer credential issuance with strict input/token shape validation.
+- Plaintext credentials are returned once and intentionally do not implement `Debug`; only SHA-256 digests are stored.
+- Added safe peer identity, explicit `library.read` capability, authentication outcomes, and persistent revocation.
+- Migrated SQLite schema from v1 to v2 with trusted-peer storage while preserving current library data.
+- Added issuance, missing/invalid credential, authentication, revocation, restart persistence, plaintext non-storage, validation, and v1 migration tests.
+- Accepted ADR-0006 and expanded the security document with assets, threats, mitigations, route policy, and mandatory LAN gates.
+- Updated API, architecture, test matrix, core/database/server READMEs, dependencies, and project status.
 
 ## Tests Last Executed
 
 - `npm run verify` — PASS; format, lint, typecheck, 4 files / 12 frontend tests, and production build passed.
 - `cargo fmt --all --check` — PASS.
 - `cargo clippy --workspace --all-targets --all-features -- -D warnings` — PASS.
-- `cargo test --workspace` — PASS; 20 core/workspace tests passed.
+- `cargo test --workspace` — PASS; 24 core/workspace tests passed.
 - `cargo check --workspace` — PASS.
 - `git diff --check` — PASS before final task/handoff documentation update.
 
 ## Tests Not Yet Executed
 
-- Interactive playback, seeking, close, and library-change behavior in a running Windows Tauri window with a supported real media file.
-- Browser/container compatibility across MP4, MKV, WebM, MOV, and M4V.
-- Non-Windows platforms and remote browser clients.
+- Remote pairing protocol, user approval, HTTP bearer middleware, encrypted transport, client secure storage, and LAN binding; these do not exist yet.
+- Interactive credential management UI and non-Windows platforms.
 
 ## Known Problems
 
-- None confirmed for the LS-006 automated scope.
+- None confirmed for the LS-007 scope.
 
 ## Assumptions
 
-- Native `<video>` controls are the correct first interface and browser codec support determines whether Direct Play succeeds.
-- The user-initiated Play action requests autoplay; native controls remain available if autoplay is declined.
-- Playback stays loopback-only and desktop-local until pairing/authentication permits LAN exposure.
+- `library.read` is the only capability in this foundation; unknown stored capabilities fail closed.
+- Credential issuance remains core-only and trusted-local until an explicit approval protocol exists.
+- Bearer credentials must never cross plaintext LAN HTTP.
+- Existing loopback routes remain unauthenticated for the local Tauri webview.
 
 ## Next Exact Step
 
-Define LS-007 for pairing/authentication and its threat model before changing the server bind address or hosting the UI for LAN clients.
+Define LS-008 for bounded, expiring, replay-resistant pairing requests and explicit local approval while retaining loopback-only binding.
