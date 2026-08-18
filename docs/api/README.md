@@ -42,4 +42,4 @@ Do not expose raw filesystem paths. Public media access must use opaque identifi
 
 Planned routes are not contracts until implemented, tested, and recorded here.
 
-The core can issue and revoke peer bearer credentials, but no credential API is exposed. ADR-0006 prohibits transmitting these credentials over plaintext LAN HTTP or changing the bind address before the complete pairing, encrypted transport, and route-authorization gates are satisfied.
+The core can run bounded, expiring, explicitly approved pairing requests and issue/revoke peer credentials, but no pairing or credential HTTP API is exposed. ADR-0006 prohibits transmitting pairing claim secrets or bearer credentials over plaintext LAN HTTP or changing the bind address before encrypted transport and route-authorization gates are satisfied.

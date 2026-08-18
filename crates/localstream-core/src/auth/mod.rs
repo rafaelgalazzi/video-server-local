@@ -7,6 +7,10 @@ use thiserror::Error;
 
 use crate::{database::LibraryDatabase, DatabaseError};
 
+mod pairing;
+pub(crate) use pairing::PairingService;
+pub use pairing::{PairingError, PairingReceipt, PendingPairing};
+
 const TOKEN_PREFIX: &str = "ls_peer_";
 const TOKEN_BYTES: usize = 32;
 const TOKEN_ENCODED_LENGTH: usize = 43;
@@ -57,13 +61,7 @@ pub(crate) fn issue_credential(
     database: &LibraryDatabase,
     display_name: &str,
 ) -> Result<IssuedCredential, AuthError> {
-    let display_name = display_name.trim();
-    if display_name.is_empty()
-        || display_name.chars().count() > 100
-        || display_name.chars().any(char::is_control)
-    {
-        return Err(AuthError::InvalidDisplayName);
-    }
+    let display_name = validate_display_name(display_name)?;
 
     let mut secret = [0_u8; TOKEN_BYTES];
     getrandom::fill(&mut secret).map_err(|_| AuthError::RandomnessUnavailable)?;
@@ -89,6 +87,17 @@ pub(crate) fn issue_credential(
     )?;
 
     Ok(IssuedCredential { peer, bearer_token })
+}
+
+pub(super) fn validate_display_name(display_name: &str) -> Result<&str, AuthError> {
+    let display_name = display_name.trim();
+    if display_name.is_empty()
+        || display_name.chars().count() > 100
+        || display_name.chars().any(char::is_control)
+    {
+        return Err(AuthError::InvalidDisplayName);
+    }
+    Ok(display_name)
 }
 
 pub(crate) fn authenticate(
@@ -127,6 +136,6 @@ pub(crate) fn authenticate(
     })
 }
 
-fn digest_token(token: &str) -> [u8; 32] {
+pub(super) fn digest_token(token: &str) -> [u8; 32] {
     Sha256::digest(token.as_bytes()).into()
 }

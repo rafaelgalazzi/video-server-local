@@ -27,14 +27,16 @@ Milestone 2 foundation: embedded HTTP API and loopback Direct Play.
 - Vue media rows can open an accessible native-controls player using the versioned opaque-ID stream URL, with loading and compatibility-error states.
 - Core peer credentials use 256-bit OS randomness, digest-only SQLite persistence, explicit `library.read` capability, restart-safe authentication, and revocation.
 - ADR-0006 and the security threat model define pairing, encrypted transport, authorization, rate-limit, and revocation gates that must precede LAN binding.
+- Bounded two-minute pairing requests use cryptographic IDs/claim secrets, human verification codes, explicit local decisions, and single-use replay protection.
+- Thin Tauri commands can list, approve, or reject pending pairing requests without exposing creation or credential claiming.
 
 ## In Progress
 
-- Nothing. LS-007 is complete; pairing protocol and LAN exposure remain gated by ADR-0006.
+- Nothing. LS-008 is complete; remote pairing and LAN exposure remain gated by ADR-0006.
 
 ## Not Started
 
-- User-approved pairing, HTTP authorization middleware, encrypted transport, and safe LAN binding.
+- Pairing approval UI, encrypted pairing HTTP routes, authorization middleware, and safe LAN binding.
 - Web UI hosting for remote browser clients.
 - Node discovery, pairing, trust, and distributed libraries.
 - FFmpeg probing/transcoding and concurrency management.
@@ -50,8 +52,9 @@ Milestone 2 foundation: embedded HTTP API and loopback Direct Play.
 - Direct Play supports one byte range per request; multipart ranges and conditional caching are not implemented.
 - Playback compatibility is delegated to the embedded browser; ffprobe metadata and transcoding fallback are not implemented.
 - Peer credential mechanics are core-only; there are no pairing endpoints, approval UI, client secret storage, or authenticated LAN routes.
+- Pairing requests are intentionally memory-only and disappear on restart; network rate limiting is not implemented because no remote pairing route exists.
 - The repository has no commits; all current files are untracked at the time of this inspection.
 
 ## Next Major Goal
 
-Define LS-008 for expiring, replay-resistant, explicitly approved pairing requests while retaining loopback-only binding.
+Define LS-009 for a trusted-local pairing approval UI while retaining loopback-only binding.

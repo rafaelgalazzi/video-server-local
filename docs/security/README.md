@@ -8,19 +8,21 @@ This document combines implemented safeguards with requirements for unimplemente
 - Pairing must require explicit user approval and establish revocable credentials.
 - Current loopback routes are trusted-local adapters and remain unauthenticated.
 - The core credential foundation issues 256-bit random bearer tokens only to trusted local callers. Plaintext is returned once; SQLite stores a SHA-256 digest, safe peer metadata, `library.read` capability, and revocation state.
-- Pairing endpoints, approval UI, client secret storage, and LAN authentication middleware are not yet implemented.
+- The in-memory pairing service limits active requests to 32, expires them after two monotonic minutes, uses collision-checked cryptographic request IDs and 256-bit claim secrets, compares claim digests in constant time, requires a matching six-digit approval code, and makes claims single-use.
+- Trusted-local Tauri adapters can only list, approve, or reject requests. They cannot create requests or claim credentials.
+- Pairing HTTP endpoints, approval UI, client secret storage, network rate limiting, and LAN authentication middleware are not yet implemented.
 
 ### Threat Model
 
-| Boundary or asset            | Threat                                                 | Implemented mitigation                                             | Remaining gate                                                                 |
-| ---------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
-| LAN listener                 | Unpaired or hostile peers request library/control data | Listener remains loopback-only                                     | Authenticate every non-public route before LAN binding                         |
-| Pairing flow                 | Guessing, replay, approval bypass, or request flooding | No remote pairing surface exists                                   | Expiring requests, local approval, replay protection, and rate limits          |
-| Bearer credential in transit | Passive capture and replay                             | Credentials never traverse the LAN                                 | Encrypted channel with authenticated server identity                           |
-| SQLite credential store      | Database disclosure exposes reusable secrets           | Only SHA-256 digests are stored; tokens have 256 random bits       | Protect application data using platform controls and avoid backups/log leakage |
-| Trusted client               | Client secret theft or loss                            | Revocation is persistent and immediate in the core                 | Platform-appropriate secure client storage and peer management UI              |
-| Authorization                | Valid peer invokes excessive capabilities              | Only explicit `library.read` exists and unknown values fail closed | Route-level capability middleware and negative tests                           |
-| Local adapter                | Untrusted remote input invokes credential issuance     | Issuance has no HTTP route and is core-only                        | Pairing service must require an explicit local approval action                 |
+| Boundary or asset            | Threat                                                 | Implemented mitigation                                                                                         | Remaining gate                                                                 |
+| ---------------------------- | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| LAN listener                 | Unpaired or hostile peers request library/control data | Listener remains loopback-only                                                                                 | Authenticate every non-public route before LAN binding                         |
+| Pairing flow                 | Guessing, replay, approval bypass, or request flooding | Bounded expiring requests, explicit decisions, 256-bit claim secrets, and replay tombstones; no remote surface | Approval UI plus encrypted and rate-limited request/claim routes               |
+| Bearer credential in transit | Passive capture and replay                             | Credentials never traverse the LAN                                                                             | Encrypted channel with authenticated server identity                           |
+| SQLite credential store      | Database disclosure exposes reusable secrets           | Only SHA-256 digests are stored; tokens have 256 random bits                                                   | Protect application data using platform controls and avoid backups/log leakage |
+| Trusted client               | Client secret theft or loss                            | Revocation is persistent and immediate in the core                                                             | Platform-appropriate secure client storage and peer management UI              |
+| Authorization                | Valid peer invokes excessive capabilities              | Only explicit `library.read` exists and unknown values fail closed                                             | Route-level capability middleware and negative tests                           |
+| Local adapter                | Untrusted remote input invokes credential issuance     | Tauri exposes only list/approve/reject; issuance requires an approved high-entropy claim                       | Add a local approval UI and keep request creation/claim off the Tauri surface  |
 
 ### Planned Route Policy
 

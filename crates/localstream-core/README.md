@@ -15,7 +15,7 @@ The crate exposes application identity information, scans explicitly approved vi
 - `src/database/`: SQLite schema, snapshot persistence, and restoration.
 - `src/server/`: Axum router, loopback lifecycle, and API contracts.
 - `src/streaming/`: opaque-ID resolution, containment checks, and byte ranges.
-- `src/auth/`: secure peer credential issuance, authentication, and revocation.
+- `src/auth/`: secure peer credentials and bounded user-approved pairing lifecycle.
 
 ## Public Interfaces
 
@@ -34,7 +34,7 @@ Axum and Tokio for the embedded server, bundled SQLite through rusqlite, Serde f
 
 ## Current Limitations
 
-Remote pairing, LAN authorization middleware/binding, compatibility inspection, audio, discovery, and FFmpeg services are not implemented. The credential core exists but must not be used over plaintext LAN HTTP. Direct Play supports single byte ranges and eight concurrent loopback streams. Rescans currently replace a complete library snapshot.
+Remote pairing routes, approval UI, LAN authorization middleware/binding, compatibility inspection, audio, discovery, and FFmpeg services are not implemented. The in-memory pairing and credential core exists but must not be used over plaintext LAN HTTP. Direct Play supports single byte ranges and eight concurrent loopback streams. Rescans currently replace a complete library snapshot.
 
 ## Planned Work
 

@@ -21,6 +21,7 @@ pub struct AppInfo {
 #[derive(Debug)]
 pub struct LocalStreamCore {
     database: database::LibraryDatabase,
+    pairing: auth::PairingService,
     stream_permits: std::sync::Arc<tokio::sync::Semaphore>,
 }
 
@@ -38,6 +39,7 @@ impl LocalStreamCore {
     pub fn open(database_path: impl AsRef<std::path::Path>) -> Result<Self, DatabaseError> {
         Ok(Self {
             database: database::LibraryDatabase::open(database_path.as_ref())?,
+            pairing: auth::PairingService::default(),
             stream_permits: std::sync::Arc::new(tokio::sync::Semaphore::new(
                 MAX_CONCURRENT_STREAMS,
             )),
@@ -48,6 +50,7 @@ impl LocalStreamCore {
     fn in_memory() -> Result<Self, DatabaseError> {
         Ok(Self {
             database: database::LibraryDatabase::in_memory()?,
+            pairing: auth::PairingService::default(),
             stream_permits: std::sync::Arc::new(tokio::sync::Semaphore::new(
                 MAX_CONCURRENT_STREAMS,
             )),
@@ -113,15 +116,55 @@ impl LocalStreamCore {
     pub fn revoke_peer(&self, peer_id: &str) -> Result<bool, auth::AuthError> {
         self.database.revoke_peer(peer_id).map_err(Into::into)
     }
+
+    pub fn begin_pairing(
+        &self,
+        display_name: &str,
+    ) -> Result<auth::PairingReceipt, auth::PairingError> {
+        self.pairing.begin(display_name)
+    }
+
+    pub fn pending_pairings(&self) -> Result<Vec<auth::PendingPairing>, auth::PairingError> {
+        self.pairing.pending()
+    }
+
+    pub fn approve_pairing(
+        &self,
+        request_id: &str,
+        verification_code: &str,
+    ) -> Result<(), auth::PairingError> {
+        self.pairing.approve(request_id, verification_code)
+    }
+
+    pub fn reject_pairing(&self, request_id: &str) -> Result<(), auth::PairingError> {
+        self.pairing.reject(request_id)
+    }
+
+    pub fn claim_pairing(
+        &self,
+        request_id: &str,
+        claim_secret: &str,
+    ) -> Result<auth::IssuedCredential, auth::PairingError> {
+        self.pairing.claim(&self.database, request_id, claim_secret)
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
+    use std::{fs, sync::Arc, time::Duration};
 
     use tempfile::tempdir;
 
     use super::LocalStreamCore;
+
+    fn pairing_core(ttl: Duration, capacity: usize) -> LocalStreamCore {
+        LocalStreamCore {
+            database: crate::database::LibraryDatabase::in_memory()
+                .expect("in-memory database should open"),
+            pairing: crate::auth::PairingService::for_test(ttl, capacity),
+            stream_permits: Arc::new(tokio::sync::Semaphore::new(super::MAX_CONCURRENT_STREAMS)),
+        }
+    }
 
     #[test]
     fn exposes_local_first_application_identity() {
@@ -300,5 +343,102 @@ mod tests {
             core.issue_peer_credential("Living\nRoom"),
             Err(crate::auth::AuthError::InvalidDisplayName)
         ));
+    }
+
+    #[test]
+    fn pairing_requires_approval_and_issues_exactly_one_credential() {
+        let core = pairing_core(Duration::from_secs(120), 4);
+        let receipt = core
+            .begin_pairing("Living Room TV")
+            .expect("request should begin");
+
+        assert!(receipt.request_id.starts_with("ls_pair_"));
+        assert!(receipt.claim_secret.starts_with("ls_claim_"));
+        assert_eq!(receipt.verification_code.len(), 6);
+        assert!(receipt
+            .verification_code
+            .bytes()
+            .all(|byte| byte.is_ascii_digit()));
+        let pending = core.pending_pairings().expect("requests should list");
+        assert_eq!(pending.len(), 1);
+        assert_eq!(pending[0].display_name, "Living Room TV");
+
+        assert!(matches!(
+            core.claim_pairing(&receipt.request_id, &receipt.claim_secret),
+            Err(crate::auth::PairingError::NotApproved)
+        ));
+        let invalid_code = if receipt.verification_code == "000000" {
+            "000001"
+        } else {
+            "000000"
+        };
+        assert!(matches!(
+            core.approve_pairing(&receipt.request_id, invalid_code),
+            Err(crate::auth::PairingError::InvalidVerificationCode)
+        ));
+        core.approve_pairing(&receipt.request_id, &receipt.verification_code)
+            .expect("matching code should approve");
+        assert!(core
+            .pending_pairings()
+            .expect("requests should list")
+            .is_empty());
+        assert!(matches!(
+            core.claim_pairing(&receipt.request_id, "ls_claim_invalid"),
+            Err(crate::auth::PairingError::InvalidClaimSecret)
+        ));
+
+        let credential = core
+            .claim_pairing(&receipt.request_id, &receipt.claim_secret)
+            .expect("approved request should issue");
+        core.authenticate_peer(Some(&credential.bearer_token))
+            .expect("issued peer should authenticate");
+        assert!(matches!(
+            core.claim_pairing(&receipt.request_id, &receipt.claim_secret),
+            Err(crate::auth::PairingError::ReplayedRequest)
+        ));
+    }
+
+    #[test]
+    fn rejected_pairing_cannot_be_claimed() {
+        let core = pairing_core(Duration::from_secs(120), 4);
+        let receipt = core
+            .begin_pairing("Unknown Browser")
+            .expect("request should begin");
+
+        core.reject_pairing(&receipt.request_id)
+            .expect("pending request should reject");
+
+        assert!(matches!(
+            core.claim_pairing(&receipt.request_id, &receipt.claim_secret),
+            Err(crate::auth::PairingError::Rejected)
+        ));
+    }
+
+    #[test]
+    fn pairing_requests_expire_and_capacity_is_bounded() {
+        let expiring = pairing_core(Duration::from_millis(1), 1);
+        let receipt = expiring
+            .begin_pairing("Short Lived Client")
+            .expect("request should begin");
+        expiring.pairing.expire_for_test(&receipt.request_id);
+        assert!(matches!(
+            expiring.approve_pairing(&receipt.request_id, &receipt.verification_code),
+            Err(crate::auth::PairingError::ExpiredRequest)
+        ));
+
+        let bounded = pairing_core(Duration::from_secs(120), 1);
+        let first = bounded
+            .begin_pairing("First Client")
+            .expect("first request should begin");
+        assert!(matches!(
+            bounded.begin_pairing("Second Client"),
+            Err(crate::auth::PairingError::CapacityReached)
+        ));
+        bounded
+            .reject_pairing(&first.request_id)
+            .expect("rejection should release capacity");
+        bounded
+            .begin_pairing("Second Client")
+            .expect("released capacity should be reusable");
     }
 }

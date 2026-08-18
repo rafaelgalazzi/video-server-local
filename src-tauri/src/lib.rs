@@ -40,6 +40,32 @@ fn server_info(
     server.info()
 }
 
+#[tauri::command]
+fn pending_pairings(
+    core: tauri::State<'_, Arc<LocalStreamCore>>,
+) -> Result<Vec<localstream_core::auth::PendingPairing>, String> {
+    core.pending_pairings().map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn approve_pairing(
+    core: tauri::State<'_, Arc<LocalStreamCore>>,
+    request_id: String,
+    verification_code: String,
+) -> Result<(), String> {
+    core.approve_pairing(&request_id, &verification_code)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn reject_pairing(
+    core: tauri::State<'_, Arc<LocalStreamCore>>,
+    request_id: String,
+) -> Result<(), String> {
+    core.reject_pairing(&request_id)
+        .map_err(|error| error.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -60,7 +86,10 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             app_info,
+            approve_pairing,
             current_library,
+            pending_pairings,
+            reject_pairing,
             server_info,
             select_and_scan_library
         ])
