@@ -44,6 +44,7 @@ Milestone 2 foundation: embedded HTTP API and loopback Direct Play.
 - HTTPS-only native pairing routes enforce actual-socket rate limits and strict body bounds, require local approval, issue one bearer credential, reject replay uniformly, and remain absent from trusted-local HTTP.
 - Approved browser claims set a 24-hour `__Host-` secure HttpOnly strict-same-site cookie with no response secret; digest-only sessions survive restart and fail uniformly on expiry, malformed cookies, capability errors, or peer/identity revocation.
 - The loopback HTTPS surface strictly validates one configured Host, requires exact same-origin Origin and safe Fetch Metadata on pairing POSTs before rate limiting, ignores forwarded authority metadata, caps TLS connections at 64, and times out stalled handshakes after five seconds.
+- The dormant HTTPS surface can optionally serve a validated production Vue directory with bounded canonical reads, correct content types, safe cache headers, SPA fallback, strict API precedence, and unchanged protected-route authentication.
 
 ## In Progress
 
@@ -52,7 +53,7 @@ Milestone 2 foundation: embedded HTTP API and loopback Direct Play.
 ## Not Started
 
 - Client secure storage and safe LAN binding.
-- Web UI hosting for remote browser clients.
+- Remote-browser bootstrap and pairing states.
 - Node discovery, pairing, trust, and distributed libraries.
 - FFmpeg probing/transcoding and concurrency management.
 - Automated tests, CI, packaging, and platform verification.
@@ -69,12 +70,12 @@ Milestone 2 foundation: embedded HTTP API and loopback Direct Play.
 - Pairing requests are intentionally memory-only and disappear on restart.
 - Native client secret storage is not implemented.
 - The authenticated HTTPS router is loopback-only and dormant from desktop startup; LAN exposure remains prohibited.
-- Same-origin static browser UI hosting and unsafe authenticated browser methods/CSRF tokens are not implemented.
+- Packaged asset-path orchestration, remote-browser bootstrap, and unsafe authenticated browser methods/CSRF tokens are not implemented.
 - The verified HTTPS lifecycle is not connected to desktop startup or LAN; interactive certificate export/install and real OS keyring operation remain untested.
-- LS-014 through LS-023 changes remain uncommitted in the working tree.
+- LS-014 through LS-024 changes remain uncommitted in the working tree.
 
 ## Next Major Goal
 
-Plan LS-024 same-origin static browser UI hosting while preserving loopback-only startup and every remaining LAN gate.
+Implement LS-025 remote-browser application bootstrap while preserving the Tauri/trusted-local desktop flow and cookie-only browser authentication.
 
 The dependency-ordered remaining backlog is maintained in [IMPLEMENTATION_ROADMAP.md](IMPLEMENTATION_ROADMAP.md). The committed completion target is the release-ready desktop LAN MVP through LS-060; post-MVP work is gated and must not silently resolve deferred architecture decisions.

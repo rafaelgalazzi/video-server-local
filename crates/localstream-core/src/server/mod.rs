@@ -1,10 +1,10 @@
-use std::{net::SocketAddr, sync::Arc, time::Duration};
+use std::{net::SocketAddr, path::PathBuf, sync::Arc, time::Duration};
 
 use axum::extract::rejection::JsonRejection;
 use axum::{
     body::Body,
     extract::{DefaultBodyLimit, Extension, Path, Request, State},
-    http::{header, HeaderMap, HeaderValue, StatusCode},
+    http::{header, HeaderMap, HeaderValue, Method, StatusCode, Uri},
     middleware::{self, Next},
     response::{IntoResponse, Response},
     routing::{get, post},
@@ -26,6 +26,36 @@ use crate::node_identity::{LeafIssuanceError, NodeIdentity, TlsConfigError};
 
 const MAX_HTTPS_CONNECTIONS: usize = 64;
 const TLS_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
+const MAX_WEB_ASSET_BYTES: u64 = 8 * 1024 * 1024;
+
+#[derive(Debug, Clone)]
+pub struct BrowserAssets {
+    root: Arc<PathBuf>,
+}
+
+impl BrowserAssets {
+    pub fn from_directory(root: impl Into<PathBuf>) -> Result<Self, BrowserAssetsError> {
+        let root =
+            std::fs::canonicalize(root.into()).map_err(|_| BrowserAssetsError::Unavailable)?;
+        if !root.is_dir() {
+            return Err(BrowserAssetsError::Unavailable);
+        }
+        let index = root.join("index.html");
+        let metadata = std::fs::metadata(index).map_err(|_| BrowserAssetsError::Unavailable)?;
+        if !metadata.is_file() || metadata.len() > MAX_WEB_ASSET_BYTES {
+            return Err(BrowserAssetsError::Unavailable);
+        }
+        Ok(Self {
+            root: Arc::new(root),
+        })
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum BrowserAssetsError {
+    #[error("the browser application assets are unavailable")]
+    Unavailable,
+}
 
 #[derive(Debug, Clone)]
 pub struct HttpsRequestPolicy {
@@ -313,6 +343,24 @@ pub fn authenticated_router(core: Arc<LocalStreamCore>) -> Router {
 }
 
 pub fn encrypted_router(core: Arc<LocalStreamCore>, policy: Arc<HttpsRequestPolicy>) -> Router {
+    encrypted_api_router(core, Arc::clone(&policy))
+}
+
+pub fn encrypted_router_with_assets(
+    core: Arc<LocalStreamCore>,
+    policy: Arc<HttpsRequestPolicy>,
+    assets: BrowserAssets,
+) -> Router {
+    encrypted_api_router(core, Arc::clone(&policy))
+        .route("/api", axum::routing::any(api_not_found))
+        .route("/api/{*path}", axum::routing::any(api_not_found))
+        .fallback(serve_browser_asset)
+        .layer(middleware::from_fn(require_https_host))
+        .layer(Extension(assets))
+        .layer(Extension(policy))
+}
+
+fn encrypted_api_router(core: Arc<LocalStreamCore>, policy: Arc<HttpsRequestPolicy>) -> Router {
     let begin = Router::new()
         .route("/api/v1/pairing/requests", post(begin_pairing))
         .route_layer(middleware::from_fn_with_state(
@@ -347,6 +395,162 @@ pub fn encrypted_router(core: Arc<LocalStreamCore>, policy: Arc<HttpsRequestPoli
         .layer(DefaultBodyLimit::max(2 * 1024))
         .layer(middleware::from_fn(require_https_host))
         .layer(Extension(policy))
+}
+
+async fn api_not_found() -> StatusCode {
+    StatusCode::NOT_FOUND
+}
+
+async fn serve_browser_asset(
+    Extension(assets): Extension<BrowserAssets>,
+    method: Method,
+    uri: Uri,
+) -> Response {
+    if !matches!(method, Method::GET | Method::HEAD) {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    let Some(relative) = safe_asset_path(uri.path()) else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    let requested_asset = !relative.as_os_str().is_empty();
+    let immutable = relative.starts_with("assets");
+    let candidate = if requested_asset {
+        assets.root.join(&relative)
+    } else {
+        assets.root.join("index.html")
+    };
+    match read_asset(&assets, candidate).await {
+        Ok(bytes) => {
+            let response_path = if requested_asset {
+                relative.as_path()
+            } else {
+                std::path::Path::new("index.html")
+            };
+            asset_response(response_path, bytes, method == Method::HEAD, immutable)
+        }
+        Err(_) if !immutable => {
+            let index = assets.root.join("index.html");
+            match read_asset(&assets, index).await {
+                Ok(bytes) => asset_response(
+                    std::path::Path::new("index.html"),
+                    bytes,
+                    method == Method::HEAD,
+                    false,
+                ),
+                Err(_) => StatusCode::NOT_FOUND.into_response(),
+            }
+        }
+        Err(_) => StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
+fn safe_asset_path(path: &str) -> Option<PathBuf> {
+    let encoded = path.strip_prefix('/')?;
+    let decoded = decode_url_path(encoded)?;
+    if decoded.contains(['\\', '\0']) || decoded.split('/').any(|part| part == ".." || part == ".")
+    {
+        return None;
+    }
+    let mut relative = PathBuf::new();
+    for segment in decoded.split('/').filter(|segment| !segment.is_empty()) {
+        relative.push(segment);
+    }
+    Some(relative)
+}
+
+fn decode_url_path(encoded: &str) -> Option<String> {
+    let bytes = encoded.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == b'%' {
+            let high = *bytes.get(index + 1)?;
+            let low = *bytes.get(index + 2)?;
+            let value = hex_value(high)? * 16 + hex_value(low)?;
+            if matches!(value, b'/' | b'\\' | b'\0') {
+                return None;
+            }
+            decoded.push(value);
+            index += 3;
+        } else {
+            decoded.push(bytes[index]);
+            index += 1;
+        }
+    }
+    String::from_utf8(decoded).ok()
+}
+
+fn hex_value(value: u8) -> Option<u8> {
+    match value {
+        b'0'..=b'9' => Some(value - b'0'),
+        b'a'..=b'f' => Some(value - b'a' + 10),
+        b'A'..=b'F' => Some(value - b'A' + 10),
+        _ => None,
+    }
+}
+
+async fn read_asset(assets: &BrowserAssets, candidate: PathBuf) -> Result<Vec<u8>, ()> {
+    let candidate = tokio::fs::canonicalize(candidate).await.map_err(|_| ())?;
+    if !candidate.starts_with(assets.root.as_ref()) {
+        return Err(());
+    }
+    let metadata = tokio::fs::metadata(&candidate).await.map_err(|_| ())?;
+    if !metadata.is_file() || metadata.len() > MAX_WEB_ASSET_BYTES {
+        return Err(());
+    }
+    let file = tokio::fs::File::open(candidate).await.map_err(|_| ())?;
+    let mut bytes = Vec::with_capacity(metadata.len() as usize);
+    file.take(MAX_WEB_ASSET_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .await
+        .map_err(|_| ())?;
+    if bytes.len() as u64 != metadata.len() {
+        return Err(());
+    }
+    Ok(bytes)
+}
+
+fn asset_response(path: &std::path::Path, bytes: Vec<u8>, head: bool, immutable: bool) -> Response {
+    let length = bytes.len();
+    let body = if head {
+        Body::empty()
+    } else {
+        Body::from(bytes)
+    };
+    let mut response = Response::new(body);
+    let content_type = match path.extension().and_then(|extension| extension.to_str()) {
+        Some("html") => "text/html; charset=utf-8",
+        Some("js" | "mjs") => "text/javascript; charset=utf-8",
+        Some("css") => "text/css; charset=utf-8",
+        Some("json" | "map") => "application/json",
+        Some("svg") => "image/svg+xml",
+        Some("png") => "image/png",
+        Some("jpg" | "jpeg") => "image/jpeg",
+        Some("webp") => "image/webp",
+        Some("ico") => "image/x-icon",
+        Some("woff") => "font/woff",
+        Some("woff2") => "font/woff2",
+        _ => "application/octet-stream",
+    };
+    if let Ok(value) = HeaderValue::from_str(content_type) {
+        response.headers_mut().insert(header::CONTENT_TYPE, value);
+    }
+    if let Ok(value) = HeaderValue::from_str(&length.to_string()) {
+        response.headers_mut().insert(header::CONTENT_LENGTH, value);
+    }
+    response.headers_mut().insert(
+        header::CACHE_CONTROL,
+        HeaderValue::from_static(if immutable {
+            "public, max-age=31536000, immutable"
+        } else {
+            "no-cache, no-store, must-revalidate"
+        }),
+    );
+    response.headers_mut().insert(
+        header::X_CONTENT_TYPE_OPTIONS,
+        HeaderValue::from_static("nosniff"),
+    );
+    response
 }
 
 async fn require_https_host(
@@ -598,13 +802,32 @@ pub async fn start_loopback_https_server(
     core: Arc<LocalStreamCore>,
     identity: &NodeIdentity,
 ) -> Result<HttpsServerHandle, HttpsServerError> {
-    start_loopback_https_server_with_limits(core, identity, HttpsLimits::default()).await
+    start_loopback_https_server_with_options(core, identity, HttpsLimits::default(), None).await
 }
 
+pub async fn start_loopback_https_server_with_assets(
+    core: Arc<LocalStreamCore>,
+    identity: &NodeIdentity,
+    assets: BrowserAssets,
+) -> Result<HttpsServerHandle, HttpsServerError> {
+    start_loopback_https_server_with_options(core, identity, HttpsLimits::default(), Some(assets))
+        .await
+}
+
+#[cfg(test)]
 async fn start_loopback_https_server_with_limits(
     core: Arc<LocalStreamCore>,
     identity: &NodeIdentity,
     limits: HttpsLimits,
+) -> Result<HttpsServerHandle, HttpsServerError> {
+    start_loopback_https_server_with_options(core, identity, limits, None).await
+}
+
+async fn start_loopback_https_server_with_options(
+    core: Arc<LocalStreamCore>,
+    identity: &NodeIdentity,
+    limits: HttpsLimits,
+    assets: Option<BrowserAssets>,
 ) -> Result<HttpsServerHandle, HttpsServerError> {
     if limits.max_connections == 0 || limits.handshake_timeout.is_zero() {
         return Err(HttpsServerError::ListenerUnavailable);
@@ -636,9 +859,18 @@ async fn start_loopback_https_server_with_limits(
                         continue;
                     };
                     let acceptor = tls_acceptor.clone();
+                    let assets = assets.clone();
+                    let request_policy = Arc::clone(&request_policy);
+                    let app = match assets {
+                        Some(assets) => encrypted_router_with_assets(
+                            Arc::clone(&core),
+                            request_policy,
+                            assets,
+                        ),
+                        None => encrypted_router(Arc::clone(&core), request_policy),
+                    };
                     let service = hyper_util::service::TowerToHyperService::new(
-                        encrypted_router(Arc::clone(&core), Arc::clone(&request_policy))
-                            .layer(Extension(peer)),
+                        app.layer(Extension(peer)),
                     );
                     let watcher = graceful.watcher();
                     let mut connection_shutdown = shutdown_receiver.clone();
@@ -868,7 +1100,7 @@ mod tests {
     use axum::{
         body::Body,
         extract::Extension,
-        http::{header, HeaderMap, HeaderValue, Request, StatusCode},
+        http::{header, HeaderMap, HeaderValue, Method, Request, StatusCode},
         middleware,
         routing::get,
         Json, Router,
@@ -881,9 +1113,10 @@ mod tests {
     use crate::{auth::TrustedPeer, LocalStreamCore};
 
     use super::{
-        authenticated_router, encrypted_router, require_library_read, router, start_local_server,
-        start_loopback_https_server, start_loopback_https_server_with_limits, HttpsLimits,
-        HttpsRequestPolicy,
+        authenticated_router, encrypted_router, encrypted_router_with_assets, require_library_read,
+        router, start_local_server, start_loopback_https_server,
+        start_loopback_https_server_with_assets, start_loopback_https_server_with_limits,
+        BrowserAssets, HttpsLimits, HttpsRequestPolicy,
     };
 
     #[derive(Clone, Default)]
@@ -990,6 +1223,181 @@ mod tests {
             .expect("library should persist");
         let id = scan.items[0].id.clone();
         (directory, core, id)
+    }
+
+    fn browser_assets() -> (tempfile::TempDir, BrowserAssets) {
+        let directory = tempdir().expect("asset directory should create");
+        fs::create_dir(directory.path().join("assets")).expect("assets directory should create");
+        fs::write(
+            directory.path().join("index.html"),
+            b"<!doctype html><div id=app></div>",
+        )
+        .expect("index should write");
+        fs::write(
+            directory.path().join("assets/app-a1b2c3.js"),
+            b"console.log('app')",
+        )
+        .expect("script should write");
+        fs::write(
+            directory.path().join("assets/app-a1b2c3.css"),
+            b"body{color:#123}",
+        )
+        .expect("stylesheet should write");
+        let assets = BrowserAssets::from_directory(directory.path())
+            .expect("browser assets should validate");
+        (directory, assets)
+    }
+
+    async fn static_request(
+        assets: BrowserAssets,
+        method: Method,
+        path: &str,
+    ) -> axum::response::Response {
+        let core = Arc::new(LocalStreamCore::in_memory().expect("core should open"));
+        let policy = Arc::new(HttpsRequestPolicy {
+            allowed_hosts: Arc::from(["localhost:443".to_owned()]),
+            allowed_origins: Arc::from(["https://localhost:443".to_owned()]),
+        });
+        encrypted_router_with_assets(core, policy, assets)
+            .oneshot(
+                Request::builder()
+                    .method(method)
+                    .uri(path)
+                    .header(header::HOST, "localhost:443")
+                    .body(Body::empty())
+                    .expect("request should build"),
+            )
+            .await
+            .expect("static request should complete")
+    }
+
+    #[tokio::test]
+    async fn browser_assets_serve_content_types_cache_policy_and_head() {
+        let (_directory, assets) = browser_assets();
+        let script = static_request(assets.clone(), Method::GET, "/assets/app-a1b2c3.js").await;
+        assert_eq!(script.status(), StatusCode::OK);
+        assert_eq!(
+            script.headers()[header::CONTENT_TYPE],
+            "text/javascript; charset=utf-8"
+        );
+        assert_eq!(
+            script.headers()[header::CACHE_CONTROL],
+            "public, max-age=31536000, immutable"
+        );
+        assert_eq!(script.headers()[header::X_CONTENT_TYPE_OPTIONS], "nosniff");
+
+        let index = static_request(assets.clone(), Method::GET, "/").await;
+        assert_eq!(index.status(), StatusCode::OK);
+        assert_eq!(
+            index.headers()[header::CONTENT_TYPE],
+            "text/html; charset=utf-8"
+        );
+        assert_eq!(
+            index.headers()[header::CACHE_CONTROL],
+            "no-cache, no-store, must-revalidate"
+        );
+
+        let head = static_request(assets, Method::HEAD, "/assets/app-a1b2c3.css").await;
+        assert_eq!(head.status(), StatusCode::OK);
+        assert_eq!(head.headers()[header::CONTENT_LENGTH], "16");
+        assert!(head
+            .into_body()
+            .collect()
+            .await
+            .expect("body should collect")
+            .to_bytes()
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn browser_assets_fallback_for_navigation_but_never_for_assets_or_api() {
+        let (_directory, assets) = browser_assets();
+        let navigation = static_request(assets.clone(), Method::GET, "/library/movies").await;
+        assert_eq!(navigation.status(), StatusCode::OK);
+        assert!(response_text(navigation).await.contains("id=app"));
+
+        let missing_asset = static_request(assets.clone(), Method::GET, "/assets/missing.js").await;
+        assert_eq!(missing_asset.status(), StatusCode::NOT_FOUND);
+
+        let missing_api = static_request(assets.clone(), Method::GET, "/api/v1/missing").await;
+        assert_eq!(missing_api.status(), StatusCode::NOT_FOUND);
+        assert!(!response_text(missing_api).await.contains("id=app"));
+
+        let protected_api = static_request(assets, Method::GET, "/api/v1/library").await;
+        assert_eq!(protected_api.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn browser_assets_reject_unsafe_or_malformed_paths_and_missing_host() {
+        let (_directory, assets) = browser_assets();
+        for path in [
+            "/assets/%2e%2e/index.html",
+            "/assets/%2Findex.html",
+            "/assets/%5cindex.html",
+            "/assets%2Fapp-a1b2c3.js",
+            "/assets/%FF.js",
+        ] {
+            let response = static_request(assets.clone(), Method::GET, path).await;
+            assert_eq!(response.status(), StatusCode::NOT_FOUND, "path: {path}");
+        }
+
+        let core = Arc::new(LocalStreamCore::in_memory().expect("core should open"));
+        let policy = Arc::new(HttpsRequestPolicy {
+            allowed_hosts: Arc::from(["localhost:443".to_owned()]),
+            allowed_origins: Arc::from(["https://localhost:443".to_owned()]),
+        });
+        let response = encrypted_router_with_assets(core, policy, assets)
+            .oneshot(
+                Request::builder()
+                    .uri("/")
+                    .body(Body::empty())
+                    .expect("request should build"),
+            )
+            .await
+            .expect("request should complete");
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn loopback_https_lifecycle_can_host_public_ui_without_exposing_library() {
+        let (_directory, assets) = browser_assets();
+        let identity = test_identity();
+        let core = Arc::new(LocalStreamCore::in_memory().expect("core should open"));
+        let server = start_loopback_https_server_with_assets(core, &identity, assets)
+            .await
+            .expect("HTTPS asset server should start");
+        let address: std::net::SocketAddr = server
+            .info()
+            .base_url
+            .strip_prefix("https://")
+            .expect("HTTPS URL should have scheme")
+            .parse()
+            .expect("HTTPS address should parse");
+
+        let (ui_status, _) = https_request(
+            address,
+            identity.root_certificate_der(),
+            "localhost",
+            "/",
+            None,
+        )
+        .await
+        .expect("UI request should complete");
+        assert_eq!(ui_status, StatusCode::OK);
+
+        let (library_status, _) = https_request(
+            address,
+            identity.root_certificate_der(),
+            "localhost",
+            "/api/v1/library",
+            None,
+        )
+        .await
+        .expect("library request should complete");
+        assert_eq!(library_status, StatusCode::UNAUTHORIZED);
+        assert_eq!(server.info().bind_scope, "loopback");
+        assert!(!server.info().lan_available);
+        server.shutdown().await;
     }
 
     #[tokio::test]

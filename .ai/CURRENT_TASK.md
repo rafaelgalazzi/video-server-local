@@ -2,11 +2,11 @@
 
 ## ID
 
-LS-023
+LS-024
 
 ## Title
 
-Strict HTTPS origin policy and transport resource limits
+Same-origin browser UI hosting
 
 ## Status
 
@@ -14,21 +14,19 @@ Completed
 
 ## Goal
 
-Harden the separate HTTPS lifecycle with strict request authority/origin and Fetch Metadata validation for pairing POSTs, bounded concurrent TLS connections, and handshake timeouts while remaining loopback-only.
+Serve an explicitly configured production Vue build from the dormant authenticated HTTPS router without changing desktop startup or enabling LAN binding.
 
 ## Acceptance Criteria
 
-- HTTPS requests require one valid Host authority matching the listener's configured origin names/address.
-- Pairing POSTs require an exact same-origin `Origin`; missing, duplicate, malformed, `null`, HTTP, or foreign origins fail uniformly.
-- `Sec-Fetch-Site`, when present, permits only `same-origin` or `none`; cross-site values fail.
-- Forwarded host/proto/origin headers are ignored.
-- Rejected origin/authority requests do not consume pairing service capacity or issue secrets.
-- Concurrent accepted TLS connections are capped by a core-owned semaphore.
-- TLS handshakes have a short timeout and stalled clients release capacity.
-- Excess connections fail closed without reaching Axum or receiving plaintext HTTP.
-- Tests cover valid/invalid origin matrix, forged forwarding headers, duplicate headers, connection saturation, timeout recovery, and unchanged safe GET behavior.
-- Browser cookie authentication remains limited to safe GET routes; no CSRF token is needed until an unsafe authenticated browser method exists.
-- Desktop startup, trusted-local HTTP, static hosting, and LAN binding remain unchanged.
+- The HTTPS router serves `index.html` and immutable production assets with correct content types.
+- Client-side navigation falls back to `index.html`.
+- `/api/` paths never use the SPA fallback, including unknown API routes.
+- Static paths reject traversal, encoded separators, malformed encoding, and non-file asset paths safely.
+- Static file reads are bounded and do not expose filesystem paths in errors.
+- HTML uses revalidation/no-store policy; fingerprinted assets use long-lived immutable caching.
+- Public UI assets do not weaken library/media authentication or pairing origin checks.
+- The active desktop HTTP listener and HTTPS loopback-only lifecycle remain unchanged.
+- Focused route/security tests and full affected-stack checks pass.
 
 ## Relevant Files
 
@@ -36,16 +34,16 @@ Harden the separate HTTPS lifecycle with strict request authority/origin and Fet
 - `crates/localstream-core/src/server/README.md`
 - `docs/api/README.md`
 - `docs/security/README.md`
-- `docs/architecture/adr/0007-private-pki-and-https-origin.md`
+- `.ai/PROJECT_STATUS.md`
 
 ## Completed
 
-- LS-022 implemented persistent revocable secure browser sessions.
-- HTTPS requires exactly one listener-matching Host authority.
-- Pairing POSTs enforce exact same-origin Origin and safe Fetch Metadata before rate limiting or pairing work.
-- Forged forwarding headers do not affect authority, origin, or source identity decisions.
-- TLS accepts are capped at 64 concurrent connections with a five-second handshake timeout and fail-closed saturation.
-- Focused authority/origin, saturation, and timeout-recovery tests pass.
+- LS-023 strict HTTPS origin policy and transport resource limits.
+- Added explicit validated production asset roots with an 8 MiB per-file limit and containment checks.
+- Added public HTML/assets, correct content types, safe cache headers, HEAD support, and SPA fallback.
+- Reserved `/api` and `/api/*` from fallback while preserving API authentication and pairing policy.
+- Added an opt-in asset-aware loopback HTTPS lifecycle without changing desktop startup or LAN exposure.
+- Added focused router/security/lifecycle coverage and verified the current Vite production build.
 
 ## In Progress
 
@@ -53,14 +51,14 @@ Harden the separate HTTPS lifecycle with strict request authority/origin and Fet
 
 ## Remaining
 
-- Nothing for LS-023.
+- Nothing for LS-024.
 
 ## Assumptions
 
-- The loopback foundation allows `https://localhost:<port>` and `https://127.0.0.1:<port>` as configured origins.
-- TLS connection capacity is 64 and handshake timeout is 5 seconds.
-- Requests without Fetch Metadata remain possible for native clients but still require exact Origin on pairing POSTs.
+- Packaged-asset path resolution belongs to a future lifecycle/platform adapter; the reusable core receives an explicit validated asset root.
+- Static files are capped at 8 MiB each; current Vite production output is substantially smaller.
+- Asset filenames under `/assets/` are content-fingerprinted by Vite and may use immutable caching; HTML and SPA fallbacks must revalidate.
 
 ## Next Exact Step
 
-Start LS-024 using the scope and completion evidence in `.ai/IMPLEMENTATION_ROADMAP.md`: same-origin static browser UI hosting without changing the active desktop listener or enabling LAN binding.
+Start LS-025 from `.ai/IMPLEMENTATION_ROADMAP.md`: select the same-origin HTTPS API in a remote browser while retaining Tauri commands and the trusted-local loopback desktop flow.

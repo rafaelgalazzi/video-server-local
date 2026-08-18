@@ -26,8 +26,9 @@ This document combines implemented safeguards with requirements for unimplemente
 - Browser claims consume the same approved single-use exchange and return no secret body, setting only a `__Host-` 24-hour `HttpOnly; Secure; SameSite=Strict; Path=/` cookie. SQLite stores its SHA-256 digest and peer/capability/expiry/revocation binding; peer revocation and identity reset invalidate sessions transactionally.
 - The HTTPS router requires exactly one configured Host on all requests. Pairing POSTs require one exact same-origin Origin and, when supplied, `Sec-Fetch-Site: same-origin` or `none`; all invalid variants fail uniformly before rate limits or pairing state. Forwarded authority metadata is ignored.
 - The HTTPS accept loop holds a semaphore permit for each connection, caps concurrency at 64, limits TLS handshakes to five seconds, and drops excess or stalled connections without plaintext fallback.
+- The optional same-origin UI router serves only canonical files inside an explicit web root, caps each read at 8 MiB, rejects traversal/malformed paths, prevents asset and API misses from reaching SPA fallback, and preserves Host and API authentication policy.
 - The future browser UI, API, and media routes share one HTTPS origin. Browser pairing establishes a revocable `HttpOnly`, `Secure`, `SameSite=Strict` session cookie; credentials are not placed in JavaScript storage or media URLs.
-- Client secret storage, same-origin static UI hosting, and LAN activation are not yet implemented.
+- Client secret storage, remote-browser bootstrap, and LAN activation are not yet implemented.
 
 ### Threat Model
 
@@ -96,7 +97,7 @@ Credential persistence alone does not satisfy this gate. ADR-0006 requires encry
 
 LS-011 established the protected-route and negative-authentication foundation. LS-013 through LS-023 subsequently added the separate loopback TLS and browser-session foundation, but the active desktop listener remains trusted-local HTTP and LAN binding is still prohibited.
 
-ADR-0007 resolves the intended transport and initial browser-session architecture. LS-013 through LS-023 implement loopback-tested encrypted native/browser pairing, revocable secure sessions, strict pairing origin checks, and transport resource limits. LAN binding remains prohibited until static hosting, client-side trust/secret handling, and remaining negative-test gates are complete. CSRF tokens become required if unsafe authenticated browser methods are introduced.
+ADR-0007 resolves the intended transport and initial browser-session architecture. LS-013 through LS-024 implement loopback-tested encrypted native/browser pairing, revocable secure sessions, strict pairing origin checks, transport resource limits, and optional same-origin UI hosting. LAN binding remains prohibited until client-side trust/secret handling and the remaining negative-test gates are complete. CSRF tokens become required if unsafe authenticated browser methods are introduced.
 
 ## Processes and Resources
 

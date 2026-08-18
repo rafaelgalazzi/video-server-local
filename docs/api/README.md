@@ -61,14 +61,19 @@ Versioned REST endpoints use the `/api/v1/` prefix. Streaming and event endpoint
 
 Do not expose raw filesystem paths. Public media access must use opaque identifiers, be limited to explicitly approved libraries, enforce the pairing/authentication model, prevent traversal, and use bounded streaming I/O.
 
+## Same-Origin Browser Application
+
+The optional HTTPS asset router serves the production Vue `index.html` and `/assets/` files from one explicitly configured, canonicalized directory. UI files are public so an unpaired browser can render onboarding; protected library and media routes still require a valid bearer credential or secure browser-session cookie.
+
+Client-side navigation falls back to `index.html`, but `/api` and `/api/*` always retain API routing and never return the SPA shell. Missing `/assets/*`, traversal attempts, malformed encoding, files outside the configured root, directories, and files larger than 8 MiB return `404` without path details. Generated `/assets/` responses use one-year immutable caching; HTML and navigation fallbacks use `no-cache, no-store, must-revalidate`. Responses include `X-Content-Type-Options: nosniff` and extension-specific content types.
+
 ## Planned
 
-- Same-origin browser UI hosting and unsafe-method CSRF protection.
-- Static browser UI hosting.
+- Remote-browser bootstrap and unsafe-method CSRF protection when an unsafe authenticated method is introduced.
 - Event transport.
 
 Planned routes are not contracts until implemented, tested, and recorded here.
 
 The core can run bounded, expiring, explicitly approved pairing requests and its separate HTTPS lifecycle can issue native bearer credentials. ADR-0006 prohibits exposing these routes over plaintext or changing the bind address before every remaining transport/session gate is satisfied.
 
-ADR-0007's private-PKI loopback HTTPS origin, encrypted pairing, and browser-session foundation are implemented and tested. This is not permission to bind on the LAN; static UI hosting, client storage, and the remaining release gates are still absent.
+ADR-0007's private-PKI loopback HTTPS origin, encrypted pairing, browser-session foundation, and optional same-origin production UI hosting are implemented and tested. This is not permission to bind on the LAN; remote bootstrap, client storage, and the remaining release gates are still absent.
