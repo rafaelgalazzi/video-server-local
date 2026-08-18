@@ -32,10 +32,11 @@ Milestone 2 foundation: embedded HTTP API and loopback Direct Play.
 - Vue polls pending pairing requests only after native availability and presents accessible code comparison, expiry, Allow/Reject, and retry states.
 - Active trusted peers can be listed through path/token-free metadata and revoked persistently through a confirmation-based local UI.
 - A dormant authenticated Axum router strictly validates bearer credentials, enforces `library.read`, inserts safe peer identity, and returns uniform unauthorized responses.
+- ADR-0007 defines persistent private-PKI node identity, native certificate pinning, explicit browser trust onboarding, and same-origin secure browser sessions.
 
 ## In Progress
 
-- Nothing. LS-011 is complete.
+- Nothing. LS-012 is complete; no runtime network behavior changed.
 
 ## Not Started
 
@@ -57,9 +58,10 @@ Milestone 2 foundation: embedded HTTP API and loopback Direct Play.
 - Peer credential mechanics are core-only; there are no pairing endpoints, approval UI, client secret storage, or authenticated LAN routes.
 - Pairing requests are intentionally memory-only and disappear on restart; network rate limiting is not implemented because no remote pairing route exists.
 - The approval UI has no real incoming requests until a later encrypted remote pairing transport exists.
-- The authenticated router is not attached to a listener; native browser media credential transport is deferred in DD-007.
+- The authenticated router is not attached to a listener; DD-007's resolved browser media credential design is not implemented.
+- ADR-0007 is design-only: node identity, TLS, browser trust installation, secure sessions, CSRF/origin checks, and encrypted pairing remain unimplemented.
 - The repository has no commits; all current files are untracked at the time of this inspection.
 
 ## Next Major Goal
 
-Define LS-012 for authenticated encrypted LAN server identity and transport design before implementing remote routes.
+Implement LS-013 persistent node-root identity and protected storage without enabling LAN binding.

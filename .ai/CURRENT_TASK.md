@@ -2,11 +2,11 @@
 
 ## ID
 
-LS-011
+LS-012
 
 ## Title
 
-Bearer authentication and library-read authorization
+Authenticated encrypted LAN identity and transport design
 
 ## Status
 
@@ -14,37 +14,37 @@ Completed
 
 ## Goal
 
-Create a separately testable authenticated Axum router that protects library metadata and media streams with strict bearer credentials and `library.read`, while leaving the active desktop loopback router and listener unchanged.
+Define the offline-capable TLS identity, client trust, browser origin, credential transport, and listener gates required before LocalStream can expose authenticated routes beyond loopback.
 
 ## Acceptance Criteria
 
-- A separate authenticated router exposes public health and protected library/stream routes.
-- Exactly one strict `Authorization: Bearer <token>` header is accepted.
-- Missing, malformed, unknown, and revoked credentials return the same safe `401` body and `WWW-Authenticate: Bearer` header.
-- Credential-store failures return the existing generic `500` without authentication details.
-- Successful authentication inserts safe peer identity into request extensions and requires `library.read`.
-- Valid credentials can read library metadata and stream byte ranges through existing thin handlers.
-- The current `router` and `start_local_server` behavior remain unauthenticated loopback-only for the desktop webview.
-- Negative and positive contract tests cover header parsing, invalid/revoked tokens, library access, and Range streaming.
-- API, security, server, test-matrix, and project documentation remain explicit that encrypted transport is still required.
+- A new ADR defines persistent node identity and authenticated TLS without requiring an Internet service.
+- Native-client certificate pinning and browser certificate trust are treated as distinct onboarding profiles.
+- Static browser assets and APIs use one HTTPS origin.
+- Browser authentication works with native media elements without exposing bearer credentials to JavaScript or URLs.
+- CSRF, origin, certificate rotation, key storage, discovery, and listener lifecycle requirements are explicit.
+- The order of implementation is split into safe, independently testable follow-up tasks.
+- No LAN listener, TLS dependency, certificate, secret, or production route is introduced by this design task.
 
 ## Relevant Files
 
-- `crates/localstream-core/src/server/mod.rs`
-- `crates/localstream-core/src/auth/mod.rs`
-- `docs/api/README.md`
+- `docs/architecture/adr/0007-private-pki-and-https-origin.md`
+- `docs/architecture/adr/README.md`
+- `docs/architecture/ARCHITECTURE_MAP.md`
 - `docs/security/README.md`
-- `docs/development/TEST_MATRIX.md`
+- `docs/api/README.md`
+- `.ai/DEFERRED_DECISIONS.md`
+- `.ai/PROJECT_STATUS.md`
 
 ## Completed
 
-- Added a separately composed authenticated router without changing the active desktop listener.
-- Enforced one strict bearer header, active credentials, and `library.read` on library and stream routes.
-- Added uniform safe unauthorized responses and generic handling for credential-store failures.
-- Inserted safe authenticated peer identity into request extensions.
-- Added positive and negative contract tests for authentication, library access, and ranged streaming.
-- Updated API, security, server, test-matrix, deferred-decision, and project documentation.
-- Completed frontend and Rust verification.
+- Reviewed ADR-0006, LS-011, the security model, API policy, architecture map, product plan, and deferred browser credential decision.
+- Confirmed that a zero-install browser cannot automatically trust a private offline server identity.
+- Selected an offline private-PKI model with native pinning and explicit browser trust onboarding.
+- Accepted ADR-0007 with separate native and browser trust profiles, same-origin HTTPS, secure browser sessions, lifecycle policy, and test gates.
+- Resolved DD-007 in favor of secure HttpOnly same-origin sessions rather than browser-visible bearer tokens or signed media URLs.
+- Updated the architecture map, API policy, security model, project status, and ADR index.
+- Verified documentation formatting and whitespace.
 
 ## In Progress
 
@@ -52,15 +52,14 @@ Create a separately testable authenticated Axum router that protects library met
 
 ## Remaining
 
-- Nothing for LS-011.
+- Nothing for LS-012.
 
 ## Assumptions
 
-- The authenticated router is a dormant reusable foundation and is not served by `start_local_server` in LS-011.
-- `library.read` is the only current peer capability; middleware still checks it explicitly.
-- Remote browser media elements cannot attach arbitrary bearer headers; the eventual encrypted browser session/signed-stream strategy remains a later design decision.
-- ADR-0006 continues to prohibit LAN binding and plaintext credential transport.
+- Primary LAN operation must continue without Internet access.
+- Browser trust installation is an explicit local administrative action, not something an untrusted web page may automate.
+- LS-012 is design-only and does not authorize binding beyond loopback.
 
 ## Next Exact Step
 
-Start LS-012 by documenting the authenticated encrypted LAN server identity and transport design before implementing or enabling any remote listener.
+Start LS-013 by implementing a reusable persistent node-root identity service and protected-storage boundary with restart/failure tests, while keeping every HTTP listener loopback-only.

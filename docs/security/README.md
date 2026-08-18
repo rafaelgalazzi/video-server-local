@@ -14,6 +14,8 @@ This document combines implemented safeguards with requirements for unimplemente
 - Trusted-peer administration exposes only opaque ID, display name, `library.read`, and creation time. Revocation requires a separate confirmation step, persists across restart, and immediately invalidates authentication.
 - A dormant authenticated Axum router accepts exactly one strict bearer header, authenticates through the core, inserts safe peer identity, and protects library/stream routes with `library.read`.
 - Missing, malformed, unknown, and revoked credentials receive the same safe `401`; the active desktop listener still uses the loopback-only local router.
+- ADR-0007 requires a persistent private node CA: native clients pin its verified public-key fingerprint, while browser devices explicitly install it into their trust store after trusted-local fingerprint comparison.
+- The future browser UI, API, and media routes share one HTTPS origin. Browser pairing establishes a revocable `HttpOnly`, `Secure`, `SameSite=Strict` session cookie; credentials are not placed in JavaScript storage or media URLs.
 - Pairing HTTP endpoints, client secret storage, encrypted transport, and network rate limiting are not yet implemented.
 
 ### Threat Model
@@ -22,7 +24,7 @@ This document combines implemented safeguards with requirements for unimplemente
 | ---------------------------- | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
 | LAN listener                 | Unpaired or hostile peers request library/control data | Listener remains loopback-only                                                                                          | Authenticate every non-public route before LAN binding                         |
 | Pairing flow                 | Guessing, replay, approval bypass, or request flooding | Bounded expiring requests, explicit local UI decisions, 256-bit claim secrets, and replay tombstones; no remote surface | Encrypted and rate-limited request/claim routes                                |
-| Bearer credential in transit | Passive capture and replay                             | Credentials never traverse the LAN                                                                                      | Encrypted channel with authenticated server identity                           |
+| Bearer credential in transit | Passive capture and replay                             | Credentials never traverse the LAN; ADR-0007 defines pinned/private-PKI TLS                                             | Implement protected node identity and TLS without plaintext fallback           |
 | SQLite credential store      | Database disclosure exposes reusable secrets           | Only SHA-256 digests are stored; tokens have 256 random bits                                                            | Protect application data using platform controls and avoid backups/log leakage |
 | Trusted client               | Client secret theft or loss                            | Local peer listing and confirmation-based persistent revocation                                                         | Platform-appropriate secure client storage                                     |
 | Authorization                | Valid peer invokes excessive capabilities              | Separate router enforces strict bearer authentication and `library.read` with negative tests                            | Activate only behind encrypted transport; add future capabilities fail-closed  |
@@ -81,7 +83,9 @@ LAN binding must not be enabled until requests are authenticated under an implem
 
 Credential persistence alone does not satisfy this gate. ADR-0006 requires encrypted transport, explicit approval, protected routes, rate limits, revocation controls, and negative security tests before any non-loopback bind.
 
-LS-011 satisfies the protected-route and negative-authentication test portion only. It does not authorize enabling LAN binding because credentials would still cross plaintext HTTP and the browser stream-session mechanism is unresolved.
+LS-011 satisfies the protected-route and negative-authentication test portion only. It does not authorize enabling LAN binding because credentials would still cross plaintext HTTP and the ADR-0007 browser-session mechanism is unimplemented.
+
+ADR-0007 resolves the intended transport and initial browser-session architecture, but none of it is implemented. LAN binding remains prohibited until its identity, TLS, trust onboarding, encrypted pairing, session, CSRF/origin, rate-limit, and negative-test gates are complete.
 
 ## Processes and Resources
 

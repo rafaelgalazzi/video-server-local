@@ -31,7 +31,7 @@ The server currently binds to `127.0.0.1` on an ephemeral port. The Tauri `serve
 
 `authenticated_router` is implemented for tests and future encrypted transports but is not served by the active desktop listener. Its health route is public. Library and stream routes require exactly one `Authorization: Bearer <credential>` header and an active `library.read` peer. Missing, malformed, unknown, and revoked credentials return the same `401` envelope and `WWW-Authenticate: Bearer`; internal credential-store failures remain generic `500` errors.
 
-Bearer authentication does not make plaintext HTTP safe. Native browser media elements also cannot attach arbitrary bearer headers, so the eventual same-origin browser session or signed-stream mechanism remains deferred in DD-007.
+Bearer authentication does not make plaintext HTTP safe. ADR-0007 selects separate future credential transports: native clients use bearer authorization over pinned TLS, while the same-origin browser UI and native media requests use a revocable secure HttpOnly session cookie. DD-007 records why credentials and signed secrets must not appear in media URLs.
 
 ## Planned Convention
 
@@ -48,3 +48,5 @@ Do not expose raw filesystem paths. Public media access must use opaque identifi
 Planned routes are not contracts until implemented, tested, and recorded here.
 
 The core can run bounded, expiring, explicitly approved pairing requests and issue/revoke peer credentials, but no pairing or credential HTTP API is exposed. ADR-0006 prohibits transmitting pairing claim secrets or bearer credentials over plaintext LAN HTTP or changing the bind address before encrypted transport and route-authorization gates are satisfied.
+
+ADR-0007 defines the future private-PKI HTTPS origin and browser-session policy. It is a design contract, not an implemented route or permission to bind on the LAN.

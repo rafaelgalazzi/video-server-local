@@ -36,3 +36,4 @@ Proposed / Accepted / Superseded / Rejected
 - [ADR-0004 — SQLite local database](0004-sqlite-local-database.md)
 - [ADR-0005 — Direct Play first](0005-direct-play-first.md)
 - [ADR-0006 — Revocable peer bearer credentials](0006-revocable-peer-credentials.md)
+- [ADR-0007 — Private PKI and same-origin HTTPS](0007-private-pki-and-https-origin.md)

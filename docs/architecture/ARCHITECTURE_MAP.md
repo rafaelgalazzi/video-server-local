@@ -22,7 +22,7 @@ LocalStream is planned as a local-first system with a Vue interface and thin tra
         SQLite         FFmpeg           mDNS
 ```
 
-The Vue/Tauri adapters, shared Rust core, library scanning, SQLite persistence, loopback Axum API, bounded Direct Play streaming, playback UI, and revocable peer credential core exist. FFmpeg, mDNS, user-approved pairing, route authorization, encrypted LAN transport, and LAN exposure remain target design.
+The Vue/Tauri adapters, shared Rust core, library scanning, SQLite persistence, loopback Axum API, bounded Direct Play streaming, playback UI, pairing decisions, peer revocation, and authenticated-route foundation exist. ADR-0007 defines the private-PKI and same-origin HTTPS target. FFmpeg, mDNS, encrypted remote pairing, browser sessions, and LAN exposure remain unimplemented.
 
 ## Responsibilities
 
@@ -43,3 +43,5 @@ The mandatory invariants are canonical in `AGENTS.md`. In summary: native and me
 ## Decisions
 
 See `docs/architecture/adr/` for accepted decisions. Significant changes require a new ADR rather than silent drift.
+
+The future network boundary has two separate listeners: a trusted-local loopback adapter for the desktop shell and an explicitly enabled HTTPS LAN adapter. The latter must load a persistent node identity and satisfy ADR-0006 and ADR-0007 before it may bind beyond loopback.

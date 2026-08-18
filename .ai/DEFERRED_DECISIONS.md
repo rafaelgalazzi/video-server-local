@@ -82,7 +82,7 @@ Do not decide before: LAN functionality, pairing, and threat modeling are mature
 
 ## DD-007 — Browser media credential transport
 
-Status: Deferred
+Status: Resolved by ADR-0007
 
 Reason for deferral: Native browser media elements cannot attach arbitrary bearer headers. Selecting cookies, narrowly scoped signed stream URLs, or another session mechanism depends on the encrypted LAN origin and static browser-hosting design.
 
@@ -92,4 +92,4 @@ Questions:
 - Are short-lived, media-scoped signed URLs needed for native media requests?
 - How are credentials refreshed, revoked, and prevented from leaking through URLs or logs?
 
-Do not decide before: Authenticated encrypted LAN hosting and browser-client origin requirements are designed.
+Resolution: Host browser assets, APIs, and media on one HTTPS origin. Pairing establishes a revocable `HttpOnly`, `Secure`, `SameSite=Strict` session cookie, allowing native media requests without exposing bearer material to JavaScript or URLs. Unsafe cookie-authenticated requests require Origin and CSRF validation. Signed stream URLs are not part of the initial design.
