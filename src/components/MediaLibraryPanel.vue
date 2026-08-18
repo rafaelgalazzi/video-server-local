@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import type { LibraryScan } from '../composables/useMediaLibrary'
+import type { LibraryScan, MediaItem } from '../composables/useMediaLibrary'
 
 defineProps<{
+  canPlay: boolean
   error: string | null
   isScanning: boolean
   isRestoring: boolean
@@ -11,6 +12,7 @@ defineProps<{
 }>()
 
 defineEmits<{
+  play: [item: MediaItem]
   select: []
 }>()
 
@@ -49,6 +51,9 @@ function formatSize(bytes: number) {
 
     <p v-if="error" class="feedback feedback--error" role="alert">{{ error }}</p>
     <p v-else-if="notice" class="feedback">{{ notice }}</p>
+    <p v-if="library?.items.length && !canPlay" class="feedback" role="status">
+      Playback will be available when the private API is ready.
+    </p>
 
     <div v-if="library && library.items.length > 0" class="media-list">
       <article v-for="(item, index) in library.items" :key="item.id" class="media-row">
@@ -57,7 +62,15 @@ function formatSize(bytes: number) {
           <h3>{{ item.title }}</h3>
           <p>{{ item.extension.toUpperCase() }} · {{ formatSize(item.sizeBytes) }}</p>
         </div>
-        <span class="media-row__status">Indexed</span>
+        <button
+          class="media-row__play"
+          type="button"
+          :disabled="!canPlay"
+          :title="canPlay ? `Play ${item.title}` : 'Playback API unavailable'"
+          @click="$emit('play', item)"
+        >
+          Play
+        </button>
       </article>
     </div>
     <p v-else-if="library" class="empty-library">

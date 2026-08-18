@@ -1,15 +1,31 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { onMounted, watch } from 'vue'
 import FoundationStatus from './components/FoundationStatus.vue'
 import MediaLibraryPanel from './components/MediaLibraryPanel.vue'
+import PlaybackPanel from './components/PlaybackPanel.vue'
 import ServerStatus from './components/ServerStatus.vue'
 import { useAppInfo } from './composables/useAppInfo'
 import { useMediaLibrary } from './composables/useMediaLibrary'
+import { usePlayback } from './composables/usePlayback'
 import { useServerStatus } from './composables/useServerStatus'
 
 const { appInfo, error, isLoading, load, runtimeLabel } = useAppInfo()
 const mediaLibrary = useMediaLibrary()
 const serverStatus = useServerStatus()
+const playback = usePlayback(serverStatus.server)
+
+watch(
+  () => mediaLibrary.library.value?.items,
+  (items) => {
+    const selectedId = playback.selectedItem.value?.id
+    if (selectedId && !items?.some((item) => item.id === selectedId)) playback.clear()
+  },
+)
+
+async function selectLibrary() {
+  playback.clear()
+  await mediaLibrary.selectLibrary()
+}
 
 onMounted(() => {
   void load()
@@ -37,13 +53,26 @@ onMounted(() => {
       />
 
       <MediaLibraryPanel
+        :can-play="playback.canPlay.value"
         :error="mediaLibrary.error.value"
         :is-scanning="mediaLibrary.isScanning.value"
         :is-restoring="mediaLibrary.isRestoring.value"
         :item-count-label="mediaLibrary.itemCountLabel.value"
         :library="mediaLibrary.library.value"
         :notice="mediaLibrary.notice.value"
-        @select="mediaLibrary.selectLibrary"
+        @play="playback.play"
+        @select="selectLibrary"
+      />
+
+      <PlaybackPanel
+        v-if="playback.selectedItem.value && playback.streamUrl.value"
+        :error="playback.error.value"
+        :item="playback.selectedItem.value"
+        :status="playback.status.value"
+        :stream-url="playback.streamUrl.value"
+        @close="playback.clear"
+        @failed="playback.markError"
+        @playing="playback.markPlaying"
       />
 
       <ServerStatus

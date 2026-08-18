@@ -200,12 +200,62 @@ h1 {
   border-bottom: 1px solid rgba(238, 248, 240, 0.1);
 }
 
-.media-row__index,
-.media-row__status {
+.media-row__index {
   font-family: 'Cascadia Mono', 'SFMono-Regular', Consolas, monospace;
   font-size: 0.68rem;
   color: #65e6ae;
   text-transform: uppercase;
+}
+
+.media-row__play {
+  border-color: rgba(101, 230, 174, 0.55);
+  padding: 0.4rem 0.8rem;
+  color: #65e6ae;
+  font-family: 'Cascadia Mono', 'SFMono-Regular', Consolas, monospace;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+}
+
+.media-row__play:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.playback-panel {
+  max-width: 680px;
+  margin-top: 1.25rem;
+  padding: 1.4rem;
+  border: 1px solid rgba(101, 230, 174, 0.3);
+  background: rgba(3, 13, 15, 0.72);
+}
+
+.playback-panel__heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.5rem;
+}
+
+.playback-panel h2 {
+  margin: 0;
+  overflow: hidden;
+  font-size: clamp(1.35rem, 2.5vw, 2rem);
+  letter-spacing: -0.035em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.playback-panel__status {
+  margin: 1rem 0 0;
+  color: #aec8c1;
+}
+
+.playback-panel__video {
+  display: block;
+  width: 100%;
+  max-height: 55vh;
+  margin-top: 1rem;
+  background: #02090a;
 }
 
 .media-row__identity h3,
@@ -332,6 +382,10 @@ h1 {
 
   .library-panel__heading {
     flex-direction: column;
+  }
+
+  .playback-panel__heading {
+    align-items: center;
   }
 }
 

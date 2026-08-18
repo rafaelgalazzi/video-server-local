@@ -2,11 +2,11 @@
 
 ## ID
 
-LS-005
+LS-006
 
 ## Title
 
-Loopback Direct Play with HTTP Range
+Vue Direct Play interface
 
 ## Status
 
@@ -14,56 +14,53 @@ Completed
 
 ## Goal
 
-Stream a persisted media file through the embedded loopback server by opaque media ID, using bounded I/O and correct single-range HTTP responses.
+Let a desktop user select an indexed video and play it through the embedded loopback Direct Play endpoint without exposing filesystem paths or moving networking logic into presentation components.
 
 ## Acceptance Criteria
 
-- `GET /api/v1/media/{id}/stream` resolves only persisted media IDs from the current approved library.
-- Raw filesystem paths never appear in URLs, response bodies, or errors.
-- The core revalidates that the resolved file remains inside the approved library before opening it.
-- Full responses stream with `200 OK`; valid single byte ranges stream with `206 Partial Content`.
-- Unsatisfiable or malformed ranges return `416 Range Not Satisfiable` with `Content-Range: bytes */{size}`.
-- File bodies use bounded streaming I/O and are never loaded fully into memory.
-- Missing/unavailable media returns a stable safe error without internal details.
-- The server remains loopback-only; LAN exposure and authentication remain out of scope.
-- Contract, range parsing, containment, concurrency, and response-body tests pass.
-- API, security, status, test matrix, and source documentation are current.
+- Indexed media rows expose an accessible Play action.
+- A playback composable owns the selected item, stream URL, and idle/loading/playing/error state.
+- Stream URLs use `ServerInfo.baseUrl`, the versioned route, and encoded opaque media IDs only.
+- Playback is disabled with clear feedback while the embedded API is unavailable.
+- A dedicated component renders native video controls plus selected-title, loading, error, and close states.
+- Changing libraries clears stale playback state.
+- Composable tests cover URL generation, unavailable-server behavior, event states, and reset behavior.
+- Frontend and project documentation are current.
 
 ## Completed
 
-- Added current-library opaque-ID-to-location lookup behind the core boundary.
-- Added canonical root/file containment validation immediately before asynchronous file opening.
-- Added a streaming domain with safe content types and single byte-range normalization.
-- Added full `200`, partial `206`, invalid `416`, missing `404`, and capacity `503` behavior with stable safe errors.
-- Added bounded Tokio file response bodies and an eight-stream core-owned concurrency limit.
-- Added range, containment, response contract, path non-disclosure, and capacity tests.
-- Updated the API, security model, architecture map, test matrix, source READMEs, and project status.
+- Added `usePlayback` for selected media, encoded versioned stream URLs, API availability, and playback event state.
+- Added four deterministic composable tests covering URL generation, unavailable API behavior, playing/error transitions, and reset.
+- Added an accessible native-controls `PlaybackPanel` with loading, compatibility error, and close states.
+- Added API-aware Play buttons to indexed media rows and clear disabled feedback before the private API is ready.
+- Integrated playback into `App.vue` and clear stale playback whenever library selection begins or the selected item leaves the restored library.
+- Updated frontend, project, and root documentation.
 
 ## Tests Last Executed
 
-- `npm run verify` — PASS; format, lint, typecheck, 3 files / 8 frontend tests, and production build passed.
+- `npm run verify` — PASS; format, lint, typecheck, 4 files / 12 frontend tests, and production build passed.
 - `cargo fmt --all --check` — PASS.
 - `cargo clippy --workspace --all-targets --all-features -- -D warnings` — PASS.
 - `cargo test --workspace` — PASS; 20 core/workspace tests passed.
 - `cargo check --workspace` — PASS.
-- `git diff --check` — PASS.
+- `git diff --check` — PASS before final task/handoff documentation update.
 
 ## Tests Not Yet Executed
 
-- Interactive playback in a real browser/video element.
-- Large-file and long-running stream soak tests.
-- LAN binding, authentication/pairing, multipart ranges, conditional requests, transcoding, and non-Windows platforms.
+- Interactive playback, seeking, close, and library-change behavior in a running Windows Tauri window with a supported real media file.
+- Browser/container compatibility across MP4, MKV, WebM, MOV, and M4V.
+- Non-Windows platforms and remote browser clients.
 
 ## Known Problems
 
-- None confirmed for the LS-005 scope.
+- None confirmed for the LS-006 automated scope.
 
 ## Assumptions
 
-- Only one byte range per request is supported; multipart ranges are rejected with `416`.
-- MIME type is derived from the scanner's supported extension allowlist.
-- Streaming remains loopback-only until pairing/authentication protects LAN access.
+- Native `<video>` controls are the correct first interface and browser codec support determines whether Direct Play succeeds.
+- The user-initiated Play action requests autoplay; native controls remain available if autoplay is declined.
+- Playback stays loopback-only and desktop-local until pairing/authentication permits LAN exposure.
 
 ## Next Exact Step
 
-Define LS-006 for a Vue playback UI that builds opaque-ID stream URLs from the reported loopback server address, or explicitly prioritize pairing/authentication foundations first.
+Define LS-007 for pairing/authentication and its threat model before changing the server bind address or hosting the UI for LAN clients.

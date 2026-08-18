@@ -24,15 +24,16 @@ Milestone 2 foundation: embedded HTTP API and loopback Direct Play.
 - Embedded Axum server with graceful lifecycle, versioned health/library routes, and safe JSON errors.
 - Loopback-only opaque-ID Direct Play with containment validation, HTTP single-range responses, bounded asynchronous I/O, and an eight-stream concurrency limit.
 - Vue displays the actual loopback API address and exposure status.
+- Vue media rows can open an accessible native-controls player using the versioned opaque-ID stream URL, with loading and compatibility-error states.
 
 ## In Progress
 
-- Nothing. LS-005 is complete; LS-002's interactive UI check remains unverified and documented.
+- Nothing. LS-006 is complete; its interactive Windows playback check remains unverified and documented.
 
 ## Not Started
 
 - Pairing/authentication and safe LAN binding.
-- Web UI hosting and playback UI.
+- Web UI hosting for remote browser clients.
 - Node discovery, pairing, trust, and distributed libraries.
 - FFmpeg probing/transcoding and concurrency management.
 - Automated tests, CI, packaging, and platform verification.
@@ -45,8 +46,9 @@ Milestone 2 foundation: embedded HTTP API and loopback Direct Play.
 - Rescans replace the full stored snapshot rather than updating incrementally.
 - HTTP and Direct Play are loopback-only on an ephemeral port until pairing/authentication is implemented.
 - Direct Play supports one byte range per request; multipart ranges and conditional caching are not implemented.
+- Playback compatibility is delegated to the embedded browser; ffprobe metadata and transcoding fallback are not implemented.
 - The repository has no commits; all current files are untracked at the time of this inspection.
 
 ## Next Major Goal
 
-Define LS-006 for a playback UI using the loopback Direct Play route, or begin pairing/authentication foundations before LAN exposure.
+Define LS-007 for pairing/authentication foundations and threat modeling before LAN exposure.

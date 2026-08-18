@@ -9,6 +9,7 @@ Own reusable Vue-native state and coordinate typed backend adapters without intr
 - `useAppInfo`: loads application metadata through an injectable adapter and exposes derived runtime state.
 - `useMediaLibrary`: restores persisted library state and coordinates approved-folder selection and safe scan results.
 - `useServerStatus`: loads the embedded HTTP server's safe address and exposure state.
+- `usePlayback`: owns selected media, opaque-ID stream URL construction, and playback state.
 
 ## Important Files
 
@@ -18,6 +19,8 @@ Own reusable Vue-native state and coordinate typed backend adapters without intr
 - `useMediaLibrary.test.ts`: success, cancellation, and failure tests.
 - `useServerStatus.ts`: server status state and typed response contract.
 - `useServerStatus.test.ts`: loopback success and failure tests.
+- `usePlayback.ts`: Direct Play selection, URL, and event state.
+- `usePlayback.test.ts`: URL safety, API availability, playback-event, and reset tests.
 
 ## Public Interfaces
 
@@ -33,4 +36,4 @@ Browser preview cannot call native commands and intentionally shows a non-fatal 
 
 ## Planned Work
 
-Create domain-specific composables for libraries, server lifecycle, nodes, playback, and settings only as those domains are implemented.
+Create domain-specific composables for server lifecycle, nodes, compatibility, and settings only as those domains are implemented.
