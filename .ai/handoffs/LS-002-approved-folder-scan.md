@@ -6,7 +6,7 @@ Let a desktop user approve one folder, scan supported video candidates in the Ru
 
 ## Current State
 
-Implementation and automated verification are complete. A fresh Windows Tauri window is running and responding. The interactive folder-selection/result-rendering check remains.
+Implementation and automated verification are complete. The interactive folder-selection/result-rendering check was not performed before the user directed work to advance to LS-003.
 
 ## Changed Files
 
@@ -39,6 +39,7 @@ Implementation and automated verification are complete. A fresh Windows Tauri wi
 - Select a folder containing a supported video.
 - Confirm the title, extension, and size render and no raw path is displayed.
 - Mark LS-002 completed and define the persistence task.
+- LS-003 may now continue, but must not claim the missing LS-002 interaction was verified.
 
 ## Tests Executed
 

@@ -8,6 +8,7 @@ Present accessible UI from typed props and events. Components do not own filesys
 
 - `FoundationStatus.vue` renders native-core availability and retry state.
 - `MediaLibraryPanel.vue` renders folder-selection, scan feedback, empty state, and safe media summaries.
+- `ServerStatus.vue` renders the embedded API address and its loopback/LAN availability state.
 
 ## Public Interfaces
 

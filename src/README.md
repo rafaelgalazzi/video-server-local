@@ -26,7 +26,7 @@ Vue 3, Vite, TypeScript, and the Tauri JavaScript API.
 
 ## Current Limitations
 
-The scanned library is session-only. Routing, persistence, server control, and playback are not implemented.
+The current library is persisted locally in SQLite. Routing, server control, and playback are not implemented.
 
 ## Planned Work
 

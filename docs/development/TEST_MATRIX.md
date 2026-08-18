@@ -9,8 +9,8 @@ LS-001 has verified frontend and Rust unit checks plus a Windows Tauri developme
 | Frontend foundation | ✅   | 🟡          | ✅      | ?     | ?     | ?       | ?   |
 | Rust core boundary  | ✅   | 🟡          | ✅      | ?     | ?     | ?       | ?   |
 | Library scanner     | ✅   | 🟡          | 🟡      | ?     | ?     | ?       | ?   |
-| SQLite              | —    | —           | ?       | ?     | ?     | ?       | ?   |
-| HTTP server         | —    | —           | ?       | ?     | ?     | ?       | ?   |
+| SQLite              | ✅   | ✅          | 🟡      | ?     | ?     | ?       | ?   |
+| HTTP server         | ✅   | ✅          | ✅      | ?     | ?     | ?       | ?   |
 | HTTP Range          | —    | —           | ?       | ?     | ?     | ?       | ?   |
 | Direct Play         | —    | —           | ?       | ?     | ?     | ?       | ?   |
 | mDNS                | —    | —           | ?       | ?     | ?     | ?       | ?   |

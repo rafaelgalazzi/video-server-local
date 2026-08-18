@@ -2,84 +2,84 @@
 
 ## ID
 
-LS-002
+LS-004
 
 ## Title
 
-Approved-folder video library scan
+Embedded Axum HTTP server and versioned library API
 
 ## Status
 
-Verification
+Completed
 
 ## Goal
 
-Let a desktop user explicitly select a local folder, scan supported video files through the reusable Rust core, and display safe media metadata in Vue without exposing raw paths.
+Run an embedded Axum server inside LocalStream with versioned health and path-free library endpoints backed by the same Rust core used by Tauri.
 
 ## Acceptance Criteria
 
-- Folder approval happens through a native desktop picker.
-- Only the selected directory is scanned; directory symlinks are not followed.
-- The reusable Rust core recursively discovers supported video extensions and tolerates inaccessible entries.
-- Results expose opaque media IDs, titles, extensions, and sizes, never raw paths.
-- Vue uses a tested Composition API composable and renders loading, cancellation, empty, error, and success states.
-- Rust and frontend quality gates pass and the flow is smoke-tested on Windows.
-- Relevant source and governance documentation is current.
+- Axum runs in-process with graceful shutdown and no separate backend executable.
+- `GET /api/v1/health` returns stable service/capability information.
+- `GET /api/v1/library` delegates to `LocalStreamCore::current_library` and never returns raw paths.
+- API errors use a stable JSON envelope without internal details.
+- The server binds to loopback on an ephemeral port until pairing/authentication is implemented.
+- Tauri exposes safe server address/status information to Vue.
+- Handler/contract and lifecycle tests pass.
+- API, security, status, and source documentation are current.
 
 ## Relevant Files
 
-- `src/`
-- `src-tauri/`
-- `crates/localstream-core/src/media/`
+- `crates/localstream-core/src/server/`
+- `src-tauri/src/lib.rs`
+- `src/composables/`
+- `docs/api/README.md`
 - `docs/security/README.md`
 - `docs/development/TEST_MATRIX.md`
 
 ## Completed
 
-- LS-001 established and verified the Vue/Tauri/Rust foundation.
-- Reviewed media scanner, identity, and filesystem exposure requirements.
-- Implemented recursive approved-folder scanning for MP4, MKV, WebM, MOV, and M4V candidates.
-- Added stable opaque UUID media IDs and path-free result models.
-- Added a thin native folder-picker Tauri command and registered the dialog plugin.
-- Added Vue selection, loading, cancellation, error, empty, skipped-entry, and result states.
-- Added three frontend and three scanner tests.
-- Passed all automated frontend and Rust quality gates.
-- Launched a fresh Windows Tauri build; the LocalStream window is visible and responding.
+- LS-003 SQLite persistence is complete and verified by automated checks.
+- Reviewed ADR-0003, the API source of truth, and the security model.
+- Added an in-process Axum router and graceful lifecycle handle.
+- Added versioned health and path-free current-library endpoints with stable error JSON.
+- Bound the pre-authentication server to an ephemeral loopback address only.
+- Initialized the shared core/server in Tauri and exposed safe server status to Vue.
+- Added router contract, path non-disclosure, loopback lifecycle, and frontend state tests.
+- Launched LocalStream on Windows and queried its real health endpoint successfully.
 
 ## In Progress
 
-- Interactive folder-picker and rendered-result smoke check.
+- None.
 
 ## Remaining
 
-- Smoke-test selection with a Windows folder.
-- Confirm the selected folder's supported videos render without a displayed raw path.
+- None for LS-004.
 
 ## Tests Last Executed
 
-- `npm run verify` — PASS; 2 files and 5 frontend tests passed.
+- `npm run verify` — PASS; 3 files and 8 frontend tests passed.
 - `cargo fmt --all --check` — PASS.
 - `cargo clippy --workspace --all-targets --all-features -- -D warnings` — PASS.
-- `cargo test --workspace` — PASS; 4 core tests passed in the workspace.
+- `cargo test --workspace` — PASS; 11 core/workspace tests passed.
 - `cargo check --workspace` — PASS.
-- Fresh `npm run tauri dev -- --no-watch` launch — PASS; Windows window visible and responding.
+- Windows Tauri launch — PASS; visible `LocalStream` window responding.
+- `GET http://127.0.0.1:53744/api/v1/health` — PASS with versioned JSON on the tested run.
 
 ## Tests Not Yet Executed
 
-- Interactive native folder selection and rendered media-list check.
-- Linux, macOS, Android, and iOS verification.
+- LAN binding, authentication/pairing, static web hosting, streaming, and non-Windows platforms.
 
 ## Known Problems
 
-- No implementation failure is known. Interactive folder selection is not yet verified.
+- The server intentionally cannot be reached from another device until pairing/authentication exists.
+- The port is ephemeral and changes between runs.
 
 ## Assumptions
 
-- LS-002 scans video extensions only: MP4, MKV, WebM, MOV, and M4V.
-- Extension matching identifies candidates, not confirmed playback compatibility.
-- IDs are stable opaque UUIDv5 values derived internally from the canonical file location; paths never cross the adapter response.
-- Persistence, deletion reconciliation, incremental scans, audio, ffprobe metadata, and playback are later tasks.
+- Loopback-only binding is mandatory until pairing/authentication protects LAN routes.
+- An ephemeral port avoids conflicts for this foundation; configurable LAN binding is a later task.
+- Static web UI hosting and media streaming are out of scope for LS-004.
 
 ## Next Exact Step
 
-In the running LocalStream window, choose a folder containing a supported video and confirm the safe media row renders; then complete LS-002.
+Define LS-005 for pairing/authentication foundations before enabling LAN exposure, or explicitly scope a loopback Direct Play/HTTP Range slice first.

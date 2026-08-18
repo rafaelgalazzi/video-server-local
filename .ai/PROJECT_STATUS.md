@@ -6,7 +6,7 @@
 
 ## Current Milestone
 
-Milestone 1: approved local video-library discovery.
+Milestone 2 foundation: embedded versioned HTTP API.
 
 ## Working
 
@@ -19,16 +19,19 @@ Milestone 1: approved local video-library discovery.
 - Frontend format, lint, typecheck, test, build, and combined verification scripts.
 - Approved-folder Rust scanner for supported video candidates with opaque IDs and no returned paths.
 - Native folder-picker adapter and Vue media-library states.
+- Embedded SQLite schema, atomic library snapshot persistence, and startup restoration.
+- Migration, restart restoration, and new/deleted media reconciliation tests.
+- Embedded Axum server with graceful lifecycle, versioned health/library routes, and safe JSON errors.
+- Vue displays the actual loopback API address and exposure status.
 
 ## In Progress
 
-- LS-002 is in verification; automated checks and Windows launch pass, but interactive folder selection is not yet verified.
+- Nothing. LS-004 is complete; LS-002's interactive UI check remains unverified and documented.
 
 ## Not Started
 
-- SQLite persistence and scan reconciliation.
-- SQLite schema and persistence.
-- Axum HTTP server, REST API, web UI hosting, and HTTP Range streaming.
+- Pairing/authentication and safe LAN binding.
+- Web UI hosting and HTTP Range streaming.
 - Direct Play and playback UI.
 - Node discovery, pairing, trust, and distributed libraries.
 - FFmpeg probing/transcoding and concurrency management.
@@ -38,9 +41,11 @@ Milestone 1: approved local video-library discovery.
 
 - Release bundling and installer behavior is unknown / not verified.
 - The current local Node.js 22.12 environment is below one transitive lint dependency's declared minimum of 22.13, although verification executed successfully.
-- Scans are session-only and extension-based; compatibility metadata is not inspected.
+- Scans are extension-based; compatibility metadata is not inspected.
+- Rescans replace the full stored snapshot rather than updating incrementally.
+- HTTP is loopback-only on an ephemeral port until pairing/authentication is implemented.
 - The repository has no commits; all current files are untracked at the time of this inspection.
 
 ## Next Major Goal
 
-Finish the LS-002 interactive folder-selection smoke check, then define SQLite persistence as the next task.
+Define LS-005 for authentication/pairing foundations before LAN exposure, or a loopback-only Direct Play/HTTP Range slice.

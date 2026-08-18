@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 use thiserror::Error;
@@ -24,6 +24,30 @@ pub struct LibraryScan {
     pub skipped_entries: usize,
 }
 
+#[derive(Debug)]
+pub(crate) struct ScannedMedia {
+    pub item: MediaItem,
+    pub path: PathBuf,
+}
+
+#[derive(Debug)]
+pub(crate) struct ScannedLibrary {
+    pub library_name: String,
+    pub root_path: PathBuf,
+    pub items: Vec<ScannedMedia>,
+    pub skipped_entries: usize,
+}
+
+impl ScannedLibrary {
+    pub(crate) fn public_view(&self) -> LibraryScan {
+        LibraryScan {
+            library_name: self.library_name.clone(),
+            items: self.items.iter().map(|media| media.item.clone()).collect(),
+            skipped_entries: self.skipped_entries,
+        }
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum LibraryScanError {
     #[error("the approved library does not exist")]
@@ -35,6 +59,12 @@ pub enum LibraryScanError {
 }
 
 pub fn scan_approved_directory(approved_directory: &Path) -> Result<LibraryScan, LibraryScanError> {
+    scan_approved_directory_records(approved_directory).map(|scan| scan.public_view())
+}
+
+pub(crate) fn scan_approved_directory_records(
+    approved_directory: &Path,
+) -> Result<ScannedLibrary, LibraryScanError> {
     if !approved_directory.exists() {
         return Err(LibraryScanError::MissingDirectory);
     }
@@ -86,23 +116,28 @@ pub fn scan_approved_directory(approved_directory: &Path) -> Result<LibraryScan,
         let opaque_id =
             Uuid::new_v5(&Uuid::NAMESPACE_URL, path.to_string_lossy().as_bytes()).to_string();
 
-        items.push(MediaItem {
-            id: opaque_id,
-            title,
-            extension,
-            size_bytes: metadata.len(),
+        items.push(ScannedMedia {
+            item: MediaItem {
+                id: opaque_id,
+                title,
+                extension,
+                size_bytes: metadata.len(),
+            },
+            path: path.to_path_buf(),
         });
     }
 
     items.sort_unstable_by(|left, right| {
-        left.title
+        left.item
+            .title
             .to_lowercase()
-            .cmp(&right.title.to_lowercase())
-            .then_with(|| left.id.cmp(&right.id))
+            .cmp(&right.item.title.to_lowercase())
+            .then_with(|| left.item.id.cmp(&right.item.id))
     });
 
-    Ok(LibraryScan {
+    Ok(ScannedLibrary {
         library_name,
+        root_path: approved_directory,
         items,
         skipped_entries,
     })

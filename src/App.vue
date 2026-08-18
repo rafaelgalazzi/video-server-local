@@ -2,13 +2,20 @@
 import { onMounted } from 'vue'
 import FoundationStatus from './components/FoundationStatus.vue'
 import MediaLibraryPanel from './components/MediaLibraryPanel.vue'
+import ServerStatus from './components/ServerStatus.vue'
 import { useAppInfo } from './composables/useAppInfo'
 import { useMediaLibrary } from './composables/useMediaLibrary'
+import { useServerStatus } from './composables/useServerStatus'
 
 const { appInfo, error, isLoading, load, runtimeLabel } = useAppInfo()
 const mediaLibrary = useMediaLibrary()
+const serverStatus = useServerStatus()
 
-onMounted(load)
+onMounted(() => {
+  void load()
+  void mediaLibrary.loadCurrentLibrary()
+  void serverStatus.load()
+})
 </script>
 
 <template>
@@ -32,10 +39,17 @@ onMounted(load)
       <MediaLibraryPanel
         :error="mediaLibrary.error.value"
         :is-scanning="mediaLibrary.isScanning.value"
+        :is-restoring="mediaLibrary.isRestoring.value"
         :item-count-label="mediaLibrary.itemCountLabel.value"
         :library="mediaLibrary.library.value"
         :notice="mediaLibrary.notice.value"
         @select="mediaLibrary.selectLibrary"
+      />
+
+      <ServerStatus
+        :error="serverStatus.error.value"
+        :server="serverStatus.server.value"
+        :status-label="serverStatus.statusLabel.value"
       />
     </section>
 

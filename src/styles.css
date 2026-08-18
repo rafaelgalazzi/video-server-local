@@ -213,6 +213,41 @@ h1 {
   margin: 0;
 }
 
+.server-status {
+  max-width: 680px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.85rem;
+  align-items: center;
+  margin-top: 1.25rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid rgba(101, 230, 174, 0.22);
+  background: rgba(3, 13, 15, 0.42);
+}
+
+.server-status__signal {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  background: #829e98;
+}
+
+.server-status__signal--ready {
+  background: #65e6ae;
+  box-shadow: 0 0 16px rgba(101, 230, 174, 0.7);
+}
+
+.server-status p {
+  margin: 0;
+}
+
+.server-status__detail {
+  margin-top: 0.2rem !important;
+  color: #829e98;
+  font-family: 'Cascadia Mono', 'SFMono-Regular', Consolas, monospace;
+  font-size: 0.72rem;
+}
+
 .media-row__identity h3 {
   overflow: hidden;
   font-size: 0.95rem;

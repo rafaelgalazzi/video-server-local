@@ -15,14 +15,20 @@ export interface LibraryScan {
 }
 
 type LibrarySelector = () => Promise<LibraryScan | null>
+type LibraryLoader = () => Promise<LibraryScan | null>
 
 const selectFromTauri: LibrarySelector = () => invoke<LibraryScan | null>('select_and_scan_library')
+const loadFromTauri: LibraryLoader = () => invoke<LibraryScan | null>('current_library')
 
-export function useMediaLibrary(selector: LibrarySelector = selectFromTauri) {
+export function useMediaLibrary(
+  selector: LibrarySelector = selectFromTauri,
+  loader: LibraryLoader = loadFromTauri,
+) {
   const library = ref<LibraryScan | null>(null)
   const error = ref<string | null>(null)
   const notice = ref<string | null>(null)
   const isScanning = ref(false)
+  const isRestoring = ref(false)
 
   const itemCountLabel = computed(() => {
     const count = library.value?.items.length ?? 0
@@ -53,12 +59,27 @@ export function useMediaLibrary(selector: LibrarySelector = selectFromTauri) {
     }
   }
 
+  async function loadCurrentLibrary() {
+    isRestoring.value = true
+    error.value = null
+
+    try {
+      library.value = await loader()
+    } catch (reason) {
+      error.value = reason instanceof Error ? reason.message : String(reason)
+    } finally {
+      isRestoring.value = false
+    }
+  }
+
   return {
     error,
     isScanning,
+    isRestoring,
     itemCountLabel,
     library,
     notice,
+    loadCurrentLibrary,
     selectLibrary,
   }
 }

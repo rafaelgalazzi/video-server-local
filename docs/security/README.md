@@ -25,6 +25,22 @@ This document combines implemented safeguards with requirements for unimplemente
 
 Persistence and future streaming routes must resolve opaque IDs against trusted internal records and revalidate containment before file access.
 
+### Implemented in LS-003
+
+- Approved root and media paths are stored only in the core-owned SQLite database under the OS application-data directory.
+- Vue restoration receives the same path-free `LibraryScan` model used after a live scan.
+- Snapshot replacement is transactional, so a failed write cannot expose a partially updated library.
+- The database schema rejects unknown future versions instead of silently downgrading them.
+
+### Implemented in LS-004
+
+- The embedded HTTP server binds only to `127.0.0.1` while pairing/authentication is absent.
+- HTTP library responses reuse the path-free core model and are contract-tested against filesystem path disclosure.
+- Handler failures return a generic stable JSON envelope without database or filesystem details.
+- The UI explicitly reports that LAN access is unavailable rather than presenting loopback as a shareable address.
+
+LAN binding must not be enabled until requests are authenticated under an implemented trust model.
+
 ## Processes and Resources
 
 - Invoke FFmpeg with structured argument APIs, never unsafe shell interpolation. Treat media and metadata as untrusted input.

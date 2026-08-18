@@ -4,6 +4,7 @@ import type { LibraryScan } from '../composables/useMediaLibrary'
 defineProps<{
   error: string | null
   isScanning: boolean
+  isRestoring: boolean
   itemCountLabel: string
   library: LibraryScan | null
   notice: string | null
@@ -31,11 +32,17 @@ function formatSize(bytes: number) {
       <div>
         <p class="section-label">Local library</p>
         <h2 id="library-title">{{ library?.libraryName ?? 'Choose your media' }}</h2>
-        <p class="library-panel__summary">
+        <p v-if="isRestoring" class="library-panel__summary">Restoring your saved library…</p>
+        <p v-else class="library-panel__summary">
           {{ library ? itemCountLabel : 'Only folders you approve will be scanned.' }}
         </p>
       </div>
-      <button class="primary-action" type="button" :disabled="isScanning" @click="$emit('select')">
+      <button
+        class="primary-action"
+        type="button"
+        :disabled="isScanning || isRestoring"
+        @click="$emit('select')"
+      >
         {{ isScanning ? 'Scanning…' : library ? 'Change folder' : 'Choose folder' }}
       </button>
     </div>

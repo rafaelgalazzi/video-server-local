@@ -44,4 +44,21 @@ describe('useMediaLibrary', () => {
     expect(subject.error.value).toBe('scan failed')
     expect(subject.isScanning.value).toBe(false)
   })
+
+  it('restores the persisted current library', async () => {
+    const subject = useMediaLibrary(
+      () => Promise.resolve(null),
+      () =>
+        Promise.resolve({
+          libraryName: 'Archive',
+          items: [],
+          skippedEntries: 0,
+        }),
+    )
+
+    await subject.loadCurrentLibrary()
+
+    expect(subject.library.value?.libraryName).toBe('Archive')
+    expect(subject.isRestoring.value).toBe(false)
+  })
 })

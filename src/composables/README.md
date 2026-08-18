@@ -7,7 +7,8 @@ Own reusable Vue-native state and coordinate typed backend adapters without intr
 ## Features
 
 - `useAppInfo`: loads application metadata through an injectable adapter and exposes derived runtime state.
-- `useMediaLibrary`: coordinates approved-folder selection and safe scan-result state.
+- `useMediaLibrary`: restores persisted library state and coordinates approved-folder selection and safe scan results.
+- `useServerStatus`: loads the embedded HTTP server's safe address and exposure state.
 
 ## Important Files
 
@@ -15,6 +16,8 @@ Own reusable Vue-native state and coordinate typed backend adapters without intr
 - `useAppInfo.test.ts`: loading, success, and failure tests.
 - `useMediaLibrary.ts`: library scan state and public result contracts.
 - `useMediaLibrary.test.ts`: success, cancellation, and failure tests.
+- `useServerStatus.ts`: server status state and typed response contract.
+- `useServerStatus.test.ts`: loopback success and failure tests.
 
 ## Public Interfaces
 
@@ -26,7 +29,7 @@ Vue Composition API and the Tauri `invoke` adapter.
 
 ## Current Limitations
 
-Browser preview cannot call native commands and intentionally shows a non-fatal preview state. Library results are session-only until SQLite persistence is implemented.
+Browser preview cannot call native commands and intentionally shows a non-fatal preview state. The desktop adapter restores the current SQLite-backed library on startup.
 
 ## Planned Work
 

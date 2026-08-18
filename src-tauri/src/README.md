@@ -6,7 +6,7 @@ Contains desktop entry points and thin Tauri command adapters.
 
 ## Features and Interfaces
 
-- `lib.rs`: registers application-info and approved-folder scan adapters and constructs managed core state.
+- `lib.rs`: initializes the database-backed core and embedded server, then registers thin status, library, and approved-folder adapters.
 - `main.rs`: invokes the library runner.
 
 ## Dependencies

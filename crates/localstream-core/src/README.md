@@ -6,11 +6,11 @@ Contains reusable Rust domain code with no dependency on Tauri or HTTP transport
 
 ## Features and Interfaces
 
-`lib.rs` defines the core facade. `media/` owns approved-folder scanning and safe result models.
+`lib.rs` defines the core facade. `media/` owns approved-folder scanning and safe result models. `database/` owns SQLite schema, persistence, and restoration. `server/` owns Axum adapters and lifecycle.
 
 ## Dependencies
 
-Serde, walkdir, UUID, and thiserror. Tests use tempfile.
+Axum, Tokio, rusqlite with bundled SQLite, Serde, walkdir, UUID, and thiserror. Tests use tower, http-body-util, serde_json, and tempfile.
 
 ## Current Limitations and Planned Work
 
