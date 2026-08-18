@@ -4,6 +4,7 @@ use thiserror::Error;
 mod database;
 pub mod media;
 pub mod server;
+pub mod streaming;
 
 pub use database::DatabaseError;
 pub use media::{LibraryScan, LibraryScanError};
@@ -19,7 +20,10 @@ pub struct AppInfo {
 #[derive(Debug)]
 pub struct LocalStreamCore {
     database: database::LibraryDatabase,
+    stream_permits: std::sync::Arc<tokio::sync::Semaphore>,
 }
+
+const MAX_CONCURRENT_STREAMS: usize = 8;
 
 #[derive(Debug, Error)]
 pub enum CoreError {
@@ -33,6 +37,9 @@ impl LocalStreamCore {
     pub fn open(database_path: impl AsRef<std::path::Path>) -> Result<Self, DatabaseError> {
         Ok(Self {
             database: database::LibraryDatabase::open(database_path.as_ref())?,
+            stream_permits: std::sync::Arc::new(tokio::sync::Semaphore::new(
+                MAX_CONCURRENT_STREAMS,
+            )),
         })
     }
 
@@ -40,6 +47,9 @@ impl LocalStreamCore {
     fn in_memory() -> Result<Self, DatabaseError> {
         Ok(Self {
             database: database::LibraryDatabase::in_memory()?,
+            stream_permits: std::sync::Arc::new(tokio::sync::Semaphore::new(
+                MAX_CONCURRENT_STREAMS,
+            )),
         })
     }
 
@@ -70,6 +80,19 @@ impl LocalStreamCore {
 
     pub fn current_library(&self) -> Result<Option<LibraryScan>, DatabaseError> {
         self.database.current_library()
+    }
+
+    pub async fn open_direct_play(
+        &self,
+        media_id: &str,
+    ) -> Result<streaming::DirectPlaySource, streaming::StreamingError> {
+        let location = self.database.media_location(media_id)?;
+        let permit = self
+            .stream_permits
+            .clone()
+            .try_acquire_owned()
+            .map_err(|_| streaming::StreamingError::Busy)?;
+        streaming::open_direct_play(location, permit).await
     }
 }
 
@@ -140,5 +163,37 @@ mod tests {
             .expect("current library should exist");
         assert_eq!(restored.items.len(), 1);
         assert_eq!(restored.items[0].title, "New");
+    }
+
+    #[tokio::test]
+    async fn limits_concurrent_direct_play_sources() {
+        let workspace = tempdir().expect("temporary workspace should be created");
+        let library = workspace.path().join("Videos");
+        fs::create_dir(&library).expect("library should be created");
+        fs::write(library.join("Movie.mp4"), b"video").expect("video should be created");
+        let core = LocalStreamCore::in_memory().expect("in-memory core should open");
+        let scan = core
+            .scan_and_persist_library(&library)
+            .expect("scan should persist");
+        let id = &scan.items[0].id;
+        let mut sources = Vec::new();
+        for _ in 0..super::MAX_CONCURRENT_STREAMS {
+            sources.push(
+                core.open_direct_play(id)
+                    .await
+                    .expect("capacity should remain"),
+            );
+        }
+
+        let error = core
+            .open_direct_play(id)
+            .await
+            .expect_err("capacity must be enforced");
+        assert!(matches!(error, crate::streaming::StreamingError::Busy));
+
+        drop(sources);
+        core.open_direct_play(id)
+            .await
+            .expect("released capacity should be reusable");
     }
 }

@@ -39,6 +39,15 @@ Persistence and future streaming routes must resolve opaque IDs against trusted 
 - Handler failures return a generic stable JSON envelope without database or filesystem details.
 - The UI explicitly reports that LAN access is unavailable rather than presenting loopback as a shareable address.
 
+### Implemented in LS-005
+
+- Streaming accepts only opaque IDs persisted for the current approved library; request values are never interpreted as paths.
+- The approved root and selected file are canonicalized immediately before access, and files outside the root are rejected.
+- Tokio file streams are bounded to the requested byte count and never load a complete media file into memory.
+- A core-owned semaphore limits Direct Play to eight concurrent streams; excess requests receive a safe `503` response.
+- Missing, invalid, outside-root, and unavailable files do not disclose internal filesystem details.
+- The streaming route remains loopback-only while pairing/authentication is absent.
+
 LAN binding must not be enabled until requests are authenticated under an implemented trust model.
 
 ## Processes and Resources

@@ -10,6 +10,10 @@
 
   Returns the current path-free `LibraryScan` JSON or `null` when no library exists. Media entries contain opaque `id`, `title`, `extension`, and `sizeBytes` fields.
 
+- `GET /api/v1/media/{id}/stream`
+
+  Streams a persisted item from the current approved library by opaque ID. Without `Range`, it returns `200 OK` and the complete file through bounded I/O. A valid single `bytes` range returns `206 Partial Content` with `Accept-Ranges`, `Content-Range`, `Content-Length`, and a video content type. Malformed, multipart, or unsatisfiable ranges return `416 Range Not Satisfiable` and `Content-Range: bytes */{size}`. Unknown IDs return `404` without filesystem details.
+
 Errors use:
 
 ```json
@@ -32,7 +36,6 @@ Do not expose raw filesystem paths. Public media access must use opaque identifi
 ## Planned
 
 - Authentication and pairing routes.
-- Opaque-ID Direct Play/HTTP Range routes.
 - Static browser UI hosting.
 - Event transport.
 

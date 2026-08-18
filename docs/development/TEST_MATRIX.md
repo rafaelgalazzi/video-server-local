@@ -11,8 +11,8 @@ LS-001 has verified frontend and Rust unit checks plus a Windows Tauri developme
 | Library scanner     | ✅   | 🟡          | 🟡      | ?     | ?     | ?       | ?   |
 | SQLite              | ✅   | ✅          | 🟡      | ?     | ?     | ?       | ?   |
 | HTTP server         | ✅   | ✅          | ✅      | ?     | ?     | ?       | ?   |
-| HTTP Range          | —    | —           | ?       | ?     | ?     | ?       | ?   |
-| Direct Play         | —    | —           | ?       | ?     | ?     | ?       | ?   |
+| HTTP Range          | ✅   | ✅          | 🟡      | ?     | ?     | ?       | ?   |
+| Direct Play         | ✅   | ✅          | 🟡      | ?     | ?     | ?       | ?   |
 | mDNS                | —    | —           | ?       | ?     | ?     | ?       | ?   |
 | Pairing             | —    | —           | ?       | ?     | ?     | ?       | ?   |
 | Remote library      | —    | —           | ?       | ?     | ?     | ?       | ?   |

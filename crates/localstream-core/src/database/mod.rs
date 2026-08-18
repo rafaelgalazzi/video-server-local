@@ -1,4 +1,7 @@
-use std::{path::Path, sync::Mutex};
+use std::{
+    path::{Path, PathBuf},
+    sync::Mutex,
+};
 
 use rusqlite::{params, Connection, OptionalExtension};
 use thiserror::Error;
@@ -10,6 +13,13 @@ const SCHEMA_VERSION: i64 = 1;
 #[derive(Debug)]
 pub(crate) struct LibraryDatabase {
     connection: Mutex<Connection>,
+}
+
+#[derive(Debug)]
+pub(crate) struct MediaLocation {
+    pub root_path: PathBuf,
+    pub media_path: PathBuf,
+    pub extension: String,
 }
 
 #[derive(Debug, Error)]
@@ -191,6 +201,34 @@ impl LibraryDatabase {
             items,
             skipped_entries,
         }))
+    }
+
+    pub(crate) fn media_location(
+        &self,
+        media_id: &str,
+    ) -> Result<Option<MediaLocation>, DatabaseError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| DatabaseError::Unavailable)?;
+        connection
+            .query_row(
+                "SELECT libraries.root_path, media_items.path, media_items.extension
+                 FROM app_state
+                 JOIN libraries ON libraries.id = app_state.current_library_id
+                 JOIN media_items ON media_items.library_id = libraries.id
+                 WHERE app_state.singleton = 1 AND media_items.id = ?1",
+                [media_id],
+                |row| {
+                    Ok(MediaLocation {
+                        root_path: PathBuf::from(row.get::<_, String>(0)?),
+                        media_path: PathBuf::from(row.get::<_, String>(1)?),
+                        extension: row.get(2)?,
+                    })
+                },
+            )
+            .optional()
+            .map_err(|_| DatabaseError::Unavailable)
     }
 }
 

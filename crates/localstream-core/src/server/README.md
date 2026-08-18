@@ -11,6 +11,7 @@ Expose versioned HTTP adapters backed by the reusable Rust core while keeping se
 - `GET /api/v1/health` service and capability response.
 - `GET /api/v1/library` path-free current-library response.
 - Stable JSON error envelope.
+- Opaque-ID Direct Play route with full and single-range responses.
 
 ## Important Files
 
@@ -28,8 +29,8 @@ Axum and Tokio. Handlers call `LocalStreamCore` rather than duplicating domain/d
 
 ## Current Limitations
 
-The server is deliberately unreachable from other LAN devices. Pairing/authentication, configurable LAN binding, static web hosting, CORS policy, rate limiting, and streaming are not implemented.
+The server is deliberately unreachable from other LAN devices. Pairing/authentication, configurable LAN binding, static web hosting, CORS policy, and request rate limiting are not implemented. Direct Play is limited to eight concurrent streams.
 
 ## Planned Work
 
-Add pairing and authentication before enabling LAN binding, then add bounded Direct Play streaming by opaque media ID.
+Add a playback UI while remaining loopback-only, then add pairing and authentication before enabling LAN binding.

@@ -6,7 +6,7 @@ Provide framework-independent LocalStream domain services reusable by Tauri, HTT
 
 ## Features
 
-The crate exposes application identity information, scans explicitly approved video-library directories, persists the current library in SQLite, and hosts thin versioned Axum HTTP adapters.
+The crate exposes application identity information, scans explicitly approved video-library directories, persists the current library in SQLite, opens containment-checked Direct Play sources, and hosts thin versioned Axum HTTP adapters.
 
 ## Important Files
 
@@ -14,6 +14,7 @@ The crate exposes application identity information, scans explicitly approved vi
 - `src/media/`: approved-directory scanner and safe media models.
 - `src/database/`: SQLite schema, snapshot persistence, and restoration.
 - `src/server/`: Axum router, loopback lifecycle, and API contracts.
+- `src/streaming/`: opaque-ID resolution, containment checks, and byte ranges.
 
 ## Public Interfaces
 
@@ -23,6 +24,7 @@ The crate exposes application identity information, scans explicitly approved vi
 - `LocalStreamCore::scan_and_persist_library`: atomic scan-and-store operation.
 - `LocalStreamCore::current_library`: safe persisted-library view.
 - `server::start_local_server`: embedded loopback HTTP lifecycle.
+- `LocalStreamCore::open_direct_play`: bounded Direct Play source resolution.
 
 ## Dependencies
 
@@ -30,7 +32,7 @@ Axum and Tokio for the embedded server, bundled SQLite through rusqlite, Serde f
 
 ## Current Limitations
 
-LAN binding, authentication, compatibility inspection, audio, discovery, streaming, and FFmpeg services are not implemented. Rescans currently replace a complete library snapshot.
+LAN binding, authentication, compatibility inspection, audio, discovery, playback UI, and FFmpeg services are not implemented. Direct Play supports single byte ranges and eight concurrent loopback streams. Rescans currently replace a complete library snapshot.
 
 ## Planned Work
 

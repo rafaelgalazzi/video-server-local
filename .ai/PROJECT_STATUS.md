@@ -6,7 +6,7 @@
 
 ## Current Milestone
 
-Milestone 2 foundation: embedded versioned HTTP API.
+Milestone 2 foundation: embedded HTTP API and loopback Direct Play.
 
 ## Working
 
@@ -22,17 +22,17 @@ Milestone 2 foundation: embedded versioned HTTP API.
 - Embedded SQLite schema, atomic library snapshot persistence, and startup restoration.
 - Migration, restart restoration, and new/deleted media reconciliation tests.
 - Embedded Axum server with graceful lifecycle, versioned health/library routes, and safe JSON errors.
+- Loopback-only opaque-ID Direct Play with containment validation, HTTP single-range responses, bounded asynchronous I/O, and an eight-stream concurrency limit.
 - Vue displays the actual loopback API address and exposure status.
 
 ## In Progress
 
-- Nothing. LS-004 is complete; LS-002's interactive UI check remains unverified and documented.
+- Nothing. LS-005 is complete; LS-002's interactive UI check remains unverified and documented.
 
 ## Not Started
 
 - Pairing/authentication and safe LAN binding.
-- Web UI hosting and HTTP Range streaming.
-- Direct Play and playback UI.
+- Web UI hosting and playback UI.
 - Node discovery, pairing, trust, and distributed libraries.
 - FFmpeg probing/transcoding and concurrency management.
 - Automated tests, CI, packaging, and platform verification.
@@ -43,9 +43,10 @@ Milestone 2 foundation: embedded versioned HTTP API.
 - The current local Node.js 22.12 environment is below one transitive lint dependency's declared minimum of 22.13, although verification executed successfully.
 - Scans are extension-based; compatibility metadata is not inspected.
 - Rescans replace the full stored snapshot rather than updating incrementally.
-- HTTP is loopback-only on an ephemeral port until pairing/authentication is implemented.
+- HTTP and Direct Play are loopback-only on an ephemeral port until pairing/authentication is implemented.
+- Direct Play supports one byte range per request; multipart ranges and conditional caching are not implemented.
 - The repository has no commits; all current files are untracked at the time of this inspection.
 
 ## Next Major Goal
 
-Define LS-005 for authentication/pairing foundations before LAN exposure, or a loopback-only Direct Play/HTTP Range slice.
+Define LS-006 for a playback UI using the loopback Direct Play route, or begin pairing/authentication foundations before LAN exposure.

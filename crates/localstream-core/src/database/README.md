@@ -9,7 +9,7 @@ Persist approved libraries and internal media-location records in embedded SQLit
 - Versioned schema migration using SQLite `user_version`.
 - Atomic library snapshot replacement after a scan.
 - Current-library restoration across core/application restarts.
-- Internal absolute paths retained only for future trusted playback resolution.
+- Internal absolute paths retained for trusted, containment-checked playback resolution.
 - Bundled SQLite library; no external database process is required.
 
 ## Important Files
@@ -30,4 +30,4 @@ The schema stores one current library selection and full-snapshot rescans. Incre
 
 ## Planned Work
 
-Use stored opaque-ID-to-path records for containment-checked local playback and HTTP streaming.
+Add incremental reconciliation while preserving opaque-ID playback lookups.
