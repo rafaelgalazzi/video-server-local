@@ -2,88 +2,84 @@
 
 ## ID
 
-LS-001
+LS-002
 
 ## Title
 
-Initial Vue, Tauri, and reusable Rust-core scaffold
+Approved-folder video library scan
 
 ## Status
 
-Completed
+Verification
 
 ## Goal
 
-Establish the first runnable project foundation from the product blueprint while preserving the accepted architecture boundaries.
+Let a desktop user explicitly select a local folder, scan supported video files through the reusable Rust core, and display safe media metadata in Vue without exposing raw paths.
 
 ## Acceptance Criteria
 
-- A Vue 3 + TypeScript + Vite frontend exists and uses Composition API state without Pinia.
-- A Tauri 2 shell exists with thin commands.
-- A separate Rust core crate exposes framework-independent application information used by a Tauri adapter.
-- Baseline frontend and Rust unit tests exist.
-- Canonical format, lint, typecheck, test, build, and verification commands are documented and wired where tooling permits.
-- Meaningful source directories contain concise README files.
-- Governance status and test evidence reflect actual results.
+- Folder approval happens through a native desktop picker.
+- Only the selected directory is scanned; directory symlinks are not followed.
+- The reusable Rust core recursively discovers supported video extensions and tolerates inaccessible entries.
+- Results expose opaque media IDs, titles, extensions, and sizes, never raw paths.
+- Vue uses a tested Composition API composable and renders loading, cancellation, empty, error, and success states.
+- Rust and frontend quality gates pass and the flow is smoke-tested on Windows.
+- Relevant source and governance documentation is current.
 
 ## Relevant Files
 
-- `package.json`
 - `src/`
 - `src-tauri/`
-- `crates/localstream-core/`
-- `docs/development/DEVELOPMENT.md`
+- `crates/localstream-core/src/media/`
+- `docs/security/README.md`
 - `docs/development/TEST_MATRIX.md`
 
 ## Completed
 
-- Repository governance bootstrap.
-- Confirmed Node.js 22.12.0 and npm 11.6.1 are available.
-- Created the Vue 3 + TypeScript + Vite frontend and offline-first foundation screen.
-- Created a typed Composition API adapter with two unit tests.
-- Created the Tauri 2 shell with a thin `app_info` command.
-- Created the standalone `localstream-core` crate and baseline Rust unit test.
-- Added npm quality commands and installed a locked dependency graph.
-- Ran the complete frontend verification pipeline successfully.
-- Generated all Tauri platform icon assets from `src-tauri/icons/app-icon.svg`.
-- Ran Rust formatting, Clippy, tests, and workspace compilation successfully.
-- Launched the Tauri application and confirmed its visible `LocalStream` window was responding on Windows.
+- LS-001 established and verified the Vue/Tauri/Rust foundation.
+- Reviewed media scanner, identity, and filesystem exposure requirements.
+- Implemented recursive approved-folder scanning for MP4, MKV, WebM, MOV, and M4V candidates.
+- Added stable opaque UUID media IDs and path-free result models.
+- Added a thin native folder-picker Tauri command and registered the dialog plugin.
+- Added Vue selection, loading, cancellation, error, empty, skipped-entry, and result states.
+- Added three frontend and three scanner tests.
+- Passed all automated frontend and Rust quality gates.
+- Launched a fresh Windows Tauri build; the LocalStream window is visible and responding.
 
 ## In Progress
 
-- None.
+- Interactive folder-picker and rendered-result smoke check.
 
 ## Remaining
 
-- None for LS-001.
+- Smoke-test selection with a Windows folder.
+- Confirm the selected folder's supported videos render without a displayed raw path.
 
 ## Tests Last Executed
 
-- `npm run verify` — PASS on 2026-08-18.
-- Vitest: 1 file and 2 tests passed.
-- Vite production build: PASS (16 modules transformed).
-- `cargo fmt --all --check` — PASS on 2026-08-18.
+- `npm run verify` — PASS; 2 files and 5 frontend tests passed.
+- `cargo fmt --all --check` — PASS.
 - `cargo clippy --workspace --all-targets --all-features -- -D warnings` — PASS.
-- `cargo test --workspace` — PASS; 1 core test passed.
+- `cargo test --workspace` — PASS; 4 core tests passed in the workspace.
 - `cargo check --workspace` — PASS.
-- `npm run tauri dev -- --no-watch` — PASS; Windows process and responsive window confirmed.
+- Fresh `npm run tauri dev -- --no-watch` launch — PASS; Windows window visible and responding.
 
 ## Tests Not Yet Executed
 
-- Release packaging and installer build.
+- Interactive native folder selection and rendered media-list check.
 - Linux, macOS, Android, and iOS verification.
 
 ## Known Problems
 
-- `npm install` warns that transitive `eslint-visitor-keys@5.0.1` declares Node `^22.13.0` while the available runtime is 22.12.0. All frontend gates still passed; use Node 22.13+ for supported development.
-- Release bundling remains disabled; LS-001 verifies the development executable only.
+- No implementation failure is known. Interactive folder selection is not yet verified.
 
 ## Assumptions
 
-- LS-001 establishes architecture and a minimal UI-to-core adapter path; media scanning, SQLite, Axum, and streaming are separate later tasks.
-- npm is the initial frontend package manager and `package-lock.json` is the canonical lockfile.
-- The initial Tauri target is desktop; mobile initialization is deferred until desktop scaffolding is verified.
+- LS-002 scans video extensions only: MP4, MKV, WebM, MOV, and M4V.
+- Extension matching identifies candidates, not confirmed playback compatibility.
+- IDs are stable opaque UUIDv5 values derived internally from the canonical file location; paths never cross the adapter response.
+- Persistence, deletion reconciliation, incremental scans, audio, ffprobe metadata, and playback are later tasks.
 
 ## Next Exact Step
 
-Define LS-002 for the first approved-folder and media-library vertical slice.
+In the running LocalStream window, choose a folder containing a supported video and confirm the safe media row renders; then complete LS-002.

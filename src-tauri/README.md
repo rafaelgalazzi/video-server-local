@@ -6,7 +6,7 @@ Provide the Tauri 2 desktop shell, lifecycle, permissions, configuration, and th
 
 ## Features
 
-The initial shell creates the main window and exposes the `app_info` command.
+The shell creates the main window, exposes `app_info`, and provides an approved-folder picker that delegates scanning to the core.
 
 ## Important Files
 
@@ -18,7 +18,7 @@ The initial shell creates the main window and exposes the `app_info` command.
 
 ## Public Interfaces
 
-Tauri command `app_info` returns core-owned application metadata. Commands must remain thin adapters.
+Tauri command `app_info` returns core-owned application metadata. `select_and_scan_library` performs native folder selection and delegates the scan to `LocalStreamCore`. Commands must remain thin adapters.
 
 ## Dependencies
 
@@ -26,7 +26,7 @@ Tauri 2 and the workspace-local `localstream-core` crate.
 
 ## Current Limitations
 
-No folder dialog, persistence, HTTP server, media integration, mobile project, or packaging configuration exists.
+No persistence, HTTP server, playback integration, mobile project, or release packaging configuration exists.
 
 ## Planned Work
 

@@ -6,7 +6,7 @@
 
 ## Current Milestone
 
-Milestone 1 foundation: Vue/Tauri shell and reusable Rust-core boundary.
+Milestone 1: approved local video-library discovery.
 
 ## Working
 
@@ -17,14 +17,16 @@ Milestone 1 foundation: Vue/Tauri shell and reusable Rust-core boundary.
 - Tauri 2 shell configured with a thin `app_info` command.
 - Framework-independent `localstream-core` Rust crate with a unit test.
 - Frontend format, lint, typecheck, test, build, and combined verification scripts.
+- Approved-folder Rust scanner for supported video candidates with opaque IDs and no returned paths.
+- Native folder-picker adapter and Vue media-library states.
 
 ## In Progress
 
-- Nothing. LS-001 is complete; the next product task has not been assigned.
+- LS-002 is in verification; automated checks and Windows launch pass, but interactive folder selection is not yet verified.
 
 ## Not Started
 
-- Media library scanning and approved-folder management.
+- SQLite persistence and scan reconciliation.
 - SQLite schema and persistence.
 - Axum HTTP server, REST API, web UI hosting, and HTTP Range streaming.
 - Direct Play and playback UI.
@@ -36,9 +38,9 @@ Milestone 1 foundation: Vue/Tauri shell and reusable Rust-core boundary.
 
 - Release bundling and installer behavior is unknown / not verified.
 - The current local Node.js 22.12 environment is below one transitive lint dependency's declared minimum of 22.13, although verification executed successfully.
-- No product media flow is implemented.
+- Scans are session-only and extension-based; compatibility metadata is not inspected.
 - The repository has no commits; all current files are untracked at the time of this inspection.
 
 ## Next Major Goal
 
-Define LS-002 for the first approved-folder/library vertical slice.
+Finish the LS-002 interactive folder-selection smoke check, then define SQLite persistence as the next task.

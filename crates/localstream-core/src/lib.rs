@@ -1,5 +1,9 @@
 use serde::Serialize;
 
+pub mod media;
+
+pub use media::{LibraryScan, LibraryScanError};
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppInfo {
@@ -19,6 +23,13 @@ impl LocalStreamCore {
             version: env!("CARGO_PKG_VERSION"),
             local_first: true,
         }
+    }
+
+    pub fn scan_library(
+        &self,
+        approved_directory: impl AsRef<std::path::Path>,
+    ) -> Result<LibraryScan, LibraryScanError> {
+        media::scan_approved_directory(approved_directory.as_ref())
     }
 }
 

@@ -118,6 +118,114 @@ h1 {
   color: #aec8c1;
 }
 
+.library-panel {
+  max-width: 680px;
+  margin-top: 1.25rem;
+  padding: 1.4rem;
+  border: 1px solid rgba(238, 248, 240, 0.14);
+  background: rgba(3, 13, 15, 0.58);
+}
+
+.library-panel__heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.5rem;
+}
+
+.section-label {
+  margin: 0 0 0.35rem;
+  font-family: 'Cascadia Mono', 'SFMono-Regular', Consolas, monospace;
+  color: #65e6ae;
+  font-size: 0.7rem;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.library-panel h2 {
+  margin: 0;
+  font-size: clamp(1.35rem, 2.5vw, 2rem);
+  letter-spacing: -0.035em;
+}
+
+.library-panel__summary {
+  margin: 0.35rem 0 0;
+  color: #829e98;
+}
+
+.primary-action {
+  flex: 0 0 auto;
+  border-color: #65e6ae;
+  color: #061416;
+  background: #65e6ae;
+  font-weight: 700;
+}
+
+.primary-action:hover,
+.primary-action:focus-visible {
+  color: #eef8f0;
+  background: transparent;
+}
+
+.primary-action:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.feedback,
+.empty-library {
+  margin: 1.2rem 0 0;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(238, 248, 240, 0.12);
+  color: #aec8c1;
+}
+
+.feedback--error {
+  color: #ffb4a9;
+}
+
+.media-list {
+  max-height: min(33vh, 300px);
+  margin-top: 1.2rem;
+  overflow-y: auto;
+  border-top: 1px solid rgba(238, 248, 240, 0.12);
+}
+
+.media-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 1rem;
+  align-items: center;
+  padding: 0.95rem 0;
+  border-bottom: 1px solid rgba(238, 248, 240, 0.1);
+}
+
+.media-row__index,
+.media-row__status {
+  font-family: 'Cascadia Mono', 'SFMono-Regular', Consolas, monospace;
+  font-size: 0.68rem;
+  color: #65e6ae;
+  text-transform: uppercase;
+}
+
+.media-row__identity h3,
+.media-row__identity p {
+  margin: 0;
+}
+
+.media-row__identity h3 {
+  overflow: hidden;
+  font-size: 0.95rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.media-row__identity p {
+  margin-top: 0.2rem;
+  color: #829e98;
+  font-size: 0.75rem;
+}
+
 .roadmap {
   display: flex;
   gap: 1.5rem;
@@ -185,6 +293,10 @@ h1 {
   .status-card button {
     grid-column: 2;
     justify-self: start;
+  }
+
+  .library-panel__heading {
+    flex-direction: column;
   }
 }
 

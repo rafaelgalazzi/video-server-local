@@ -7,6 +7,7 @@ Present accessible UI from typed props and events. Components do not own filesys
 ## Features
 
 - `FoundationStatus.vue` renders native-core availability and retry state.
+- `MediaLibraryPanel.vue` renders folder-selection, scan feedback, empty state, and safe media summaries.
 
 ## Public Interfaces
 
@@ -18,7 +19,7 @@ Vue presentation APIs and types from `src/composables` where appropriate.
 
 ## Current Limitations
 
-Only the initial foundation screen exists. No media components are implemented.
+Media rows are informational only; playback, artwork, search, and persistence are not implemented.
 
 ## Planned Work
 

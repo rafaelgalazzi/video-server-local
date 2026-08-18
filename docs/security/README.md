@@ -1,6 +1,6 @@
 # Security Model
 
-This document states requirements, not verified implementation. No security-sensitive application code exists yet.
+This document combines implemented safeguards with requirements for unimplemented network and playback features.
 
 ## Trust and Pairing
 
@@ -14,6 +14,16 @@ This document states requirements, not verified implementation. No security-sens
 - Raw paths are private and must never appear in public API payloads or URLs.
 - Clients use opaque media identifiers resolved inside the trusted core.
 - Canonicalization and containment checks must prevent directory traversal, symlink escapes where applicable, and identifier manipulation.
+
+### Implemented in LS-002
+
+- A user must choose the scan root through the native folder picker.
+- The core canonicalizes the approved root and does not follow directory symlinks during traversal.
+- Scan responses contain UUID media identifiers and display metadata only; filesystem paths remain inside Rust.
+- Files are not opened or loaded during discovery; only directory entries and file metadata are read.
+- Individual traversal/metadata failures are skipped and counted rather than exposing their paths or aborting successful entries.
+
+Persistence and future streaming routes must resolve opaque IDs against trusted internal records and revalidate containment before file access.
 
 ## Processes and Resources
 

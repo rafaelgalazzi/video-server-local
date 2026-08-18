@@ -6,12 +6,12 @@ Contains reusable Rust domain code with no dependency on Tauri or HTTP transport
 
 ## Features and Interfaces
 
-`lib.rs` currently defines `LocalStreamCore::app_info` and its `AppInfo` return type, with a baseline unit test.
+`lib.rs` defines the core facade. `media/` owns approved-folder scanning and safe result models.
 
 ## Dependencies
 
-Serde derives only.
+Serde, walkdir, UUID, and thiserror. Tests use tempfile.
 
 ## Current Limitations and Planned Work
 
-This is a boundary proof, not the media core. Add responsibility-focused modules as vertical product slices require them.
+Scanning currently identifies video candidates by extension only and does not persist results. Add responsibility-focused modules as vertical product slices require them.

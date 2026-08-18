@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
 import FoundationStatus from './components/FoundationStatus.vue'
+import MediaLibraryPanel from './components/MediaLibraryPanel.vue'
 import { useAppInfo } from './composables/useAppInfo'
+import { useMediaLibrary } from './composables/useMediaLibrary'
 
 const { appInfo, error, isLoading, load, runtimeLabel } = useAppInfo()
+const mediaLibrary = useMediaLibrary()
 
 onMounted(load)
 </script>
@@ -24,6 +27,15 @@ onMounted(load)
         :is-loading="isLoading"
         :runtime-label="runtimeLabel"
         @retry="load"
+      />
+
+      <MediaLibraryPanel
+        :error="mediaLibrary.error.value"
+        :is-scanning="mediaLibrary.isScanning.value"
+        :item-count-label="mediaLibrary.itemCountLabel.value"
+        :library="mediaLibrary.library.value"
+        :notice="mediaLibrary.notice.value"
+        @select="mediaLibrary.selectLibrary"
       />
     </section>
 

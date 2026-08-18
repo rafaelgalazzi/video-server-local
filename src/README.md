@@ -6,7 +6,7 @@ This directory contains the Vue 3 + TypeScript presentation layer.
 
 ## Features
 
-The initial shell displays product identity and loads framework-independent application information through a backend adapter.
+The shell displays product identity, loads framework-independent application information, and presents an approved-folder video scan through typed backend adapters.
 
 ## Important Files
 
@@ -26,7 +26,7 @@ Vue 3, Vite, TypeScript, and the Tauri JavaScript API.
 
 ## Current Limitations
 
-There is no media library, routing, persistence, server control, or playback implementation.
+The scanned library is session-only. Routing, persistence, server control, and playback are not implemented.
 
 ## Planned Work
 
