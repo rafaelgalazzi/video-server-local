@@ -14,6 +14,7 @@ LS-001 has verified frontend and Rust unit checks plus a Windows Tauri developme
 | HTTP Range          | ✅   | ✅          | 🟡      | ?     | ?     | ?       | ?   |
 | Direct Play         | ✅   | ✅          | 🟡      | ?     | ?     | ?       | ?   |
 | Peer credentials    | ✅   | ✅          | 🟡      | ?     | ?     | ?       | ?   |
+| API authorization   | ✅   | ✅          | 🟡      | ?     | ?     | ?       | ?   |
 | mDNS                | —    | —           | ?       | ?     | ?     | ?       | ?   |
 | Pairing             | ✅   | ✅          | 🟡      | ?     | ?     | ?       | ?   |
 | Remote library      | —    | —           | ?       | ?     | ?     | ?       | ?   |

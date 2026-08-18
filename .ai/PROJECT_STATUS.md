@@ -31,14 +31,15 @@ Milestone 2 foundation: embedded HTTP API and loopback Direct Play.
 - Thin Tauri commands can list, approve, or reject pending pairing requests without exposing creation or credential claiming.
 - Vue polls pending pairing requests only after native availability and presents accessible code comparison, expiry, Allow/Reject, and retry states.
 - Active trusted peers can be listed through path/token-free metadata and revoked persistently through a confirmation-based local UI.
+- A dormant authenticated Axum router strictly validates bearer credentials, enforces `library.read`, inserts safe peer identity, and returns uniform unauthorized responses.
 
 ## In Progress
 
-- Nothing. LS-010 is complete; remote pairing and LAN exposure remain gated by ADR-0006.
+- Nothing. LS-011 is complete.
 
 ## Not Started
 
-- Encrypted pairing HTTP routes, authorization middleware, client secure storage, and safe LAN binding.
+- Encrypted pairing/session routes, client secure storage, rate limiting, and safe LAN binding.
 - Web UI hosting for remote browser clients.
 - Node discovery, pairing, trust, and distributed libraries.
 - FFmpeg probing/transcoding and concurrency management.
@@ -56,8 +57,9 @@ Milestone 2 foundation: embedded HTTP API and loopback Direct Play.
 - Peer credential mechanics are core-only; there are no pairing endpoints, approval UI, client secret storage, or authenticated LAN routes.
 - Pairing requests are intentionally memory-only and disappear on restart; network rate limiting is not implemented because no remote pairing route exists.
 - The approval UI has no real incoming requests until a later encrypted remote pairing transport exists.
+- The authenticated router is not attached to a listener; native browser media credential transport is deferred in DD-007.
 - The repository has no commits; all current files are untracked at the time of this inspection.
 
 ## Next Major Goal
 
-Define LS-011 for bearer authentication and `library.read` authorization middleware while retaining loopback-only binding.
+Define LS-012 for authenticated encrypted LAN server identity and transport design before implementing remote routes.

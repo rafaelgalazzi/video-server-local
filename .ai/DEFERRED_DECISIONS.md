@@ -79,3 +79,17 @@ Questions:
 - What identity, transport security, and relay model would be acceptable?
 
 Do not decide before: LAN functionality, pairing, and threat modeling are mature.
+
+## DD-007 — Browser media credential transport
+
+Status: Deferred
+
+Reason for deferral: Native browser media elements cannot attach arbitrary bearer headers. Selecting cookies, narrowly scoped signed stream URLs, or another session mechanism depends on the encrypted LAN origin and static browser-hosting design.
+
+Questions:
+
+- Should same-origin browser clients use an HttpOnly secure session cookie with CSRF protections?
+- Are short-lived, media-scoped signed URLs needed for native media requests?
+- How are credentials refreshed, revoked, and prevented from leaking through URLs or logs?
+
+Do not decide before: Authenticated encrypted LAN hosting and browser-client origin requirements are designed.

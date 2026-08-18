@@ -27,6 +27,12 @@ Errors use:
 
 The server currently binds to `127.0.0.1` on an ephemeral port. The Tauri `server_info` adapter reports the active base URL. This is not yet a LAN-accessible API.
 
+## Authenticated Router Foundation
+
+`authenticated_router` is implemented for tests and future encrypted transports but is not served by the active desktop listener. Its health route is public. Library and stream routes require exactly one `Authorization: Bearer <credential>` header and an active `library.read` peer. Missing, malformed, unknown, and revoked credentials return the same `401` envelope and `WWW-Authenticate: Bearer`; internal credential-store failures remain generic `500` errors.
+
+Bearer authentication does not make plaintext HTTP safe. Native browser media elements also cannot attach arbitrary bearer headers, so the eventual same-origin browser session or signed-stream mechanism remains deferred in DD-007.
+
 ## Planned Convention
 
 Versioned REST endpoints use the `/api/v1/` prefix. Streaming and event endpoints must be documented here when their contracts are implemented. HTTP handlers remain thin adapters to reusable Rust services.
@@ -36,7 +42,6 @@ Do not expose raw filesystem paths. Public media access must use opaque identifi
 ## Planned
 
 - Expiring, rate-limited pairing request/confirmation routes with explicit local approval.
-- Bearer authentication and `library.read` authorization for every LAN library/stream route.
 - Static browser UI hosting.
 - Event transport.
 

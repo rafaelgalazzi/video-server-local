@@ -2,8 +2,9 @@ use std::{net::SocketAddr, sync::Arc};
 
 use axum::{
     body::Body,
-    extract::{Path, State},
+    extract::{Path, Request, State},
     http::{header, HeaderMap, HeaderValue, StatusCode},
+    middleware::{self, Next},
     response::{IntoResponse, Response},
     routing::get,
     Json, Router,
@@ -14,6 +15,7 @@ use tokio::{net::TcpListener, sync::oneshot, task::JoinHandle};
 use tokio_util::io::ReaderStream;
 
 use crate::{
+    auth::{AuthError, PeerCapability},
     streaming::{range::parse_single_range, StreamingError},
     LibraryScan, LocalStreamCore,
 };
@@ -136,6 +138,21 @@ pub fn router(core: Arc<LocalStreamCore>) -> Router {
         .with_state(core)
 }
 
+pub fn authenticated_router(core: Arc<LocalStreamCore>) -> Router {
+    let protected_routes = Router::new()
+        .route("/api/v1/library", get(current_library))
+        .route("/api/v1/media/{id}/stream", get(stream_media))
+        .route_layer(middleware::from_fn_with_state(
+            Arc::clone(&core),
+            require_library_read,
+        ));
+
+    Router::new()
+        .route("/api/v1/health", get(health))
+        .merge(protected_routes)
+        .with_state(core)
+}
+
 pub async fn start_local_server(core: Arc<LocalStreamCore>) -> std::io::Result<ServerHandle> {
     let listener = TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0)).await?;
     let address = listener.local_addr()?;
@@ -171,6 +188,57 @@ async fn health() -> Json<HealthResponse> {
         api_version: "v1",
         lan_available: false,
     })
+}
+
+async fn require_library_read(
+    State(core): State<Arc<LocalStreamCore>>,
+    mut request: Request,
+    next: Next,
+) -> Response {
+    let bearer_token = strict_bearer_token(request.headers());
+    match core.authenticate_peer(bearer_token) {
+        Ok(peer) if peer.capability == PeerCapability::LibraryRead => {
+            request.extensions_mut().insert(peer);
+            next.run(request).await
+        }
+        Err(
+            AuthError::MissingCredential
+            | AuthError::InvalidCredential
+            | AuthError::RevokedCredential,
+        ) => unauthorized_response(),
+        Ok(_)
+        | Err(
+            AuthError::InvalidDisplayName
+            | AuthError::RandomnessUnavailable
+            | AuthError::Unavailable,
+        ) => ApiError::internal().into_response(),
+    }
+}
+
+fn strict_bearer_token(headers: &HeaderMap) -> Option<&str> {
+    let mut values = headers.get_all(header::AUTHORIZATION).iter();
+    let value = values.next()?;
+    if values.next().is_some() {
+        return None;
+    }
+    value.to_str().ok()?.strip_prefix("Bearer ")
+}
+
+fn unauthorized_response() -> Response {
+    let mut response = (
+        StatusCode::UNAUTHORIZED,
+        Json(ApiErrorEnvelope {
+            error: ApiErrorBody {
+                code: "unauthorized",
+                message: "Authentication is required.",
+            },
+        }),
+    )
+        .into_response();
+    response
+        .headers_mut()
+        .insert(header::WWW_AUTHENTICATE, HeaderValue::from_static("Bearer"));
+    response
 }
 
 async fn current_library(
@@ -253,14 +321,21 @@ async fn stream_media(
 mod tests {
     use std::{fs, sync::Arc};
 
-    use axum::{body::Body, http::Request};
+    use axum::{
+        body::Body,
+        extract::Extension,
+        http::{header, HeaderValue, Request, StatusCode},
+        middleware,
+        routing::get,
+        Json, Router,
+    };
     use http_body_util::BodyExt;
     use tempfile::tempdir;
     use tower::ServiceExt;
 
-    use crate::LocalStreamCore;
+    use crate::{auth::TrustedPeer, LocalStreamCore};
 
-    use super::{router, start_local_server};
+    use super::{authenticated_router, require_library_read, router, start_local_server};
 
     fn persisted_media() -> (tempfile::TempDir, Arc<LocalStreamCore>, String) {
         let directory = tempdir().expect("temporary library should be created");
@@ -445,5 +520,173 @@ mod tests {
         let text = String::from_utf8(body.to_vec()).expect("body should be UTF-8");
         assert!(text.contains("media_not_found"));
         assert!(!text.contains("Movie.mp4"));
+    }
+
+    async fn response_text(response: axum::response::Response) -> String {
+        let body = response
+            .into_body()
+            .collect()
+            .await
+            .expect("body should collect")
+            .to_bytes();
+        String::from_utf8(body.to_vec()).expect("body should be UTF-8")
+    }
+
+    #[tokio::test]
+    async fn authenticated_router_keeps_health_public() {
+        let core = Arc::new(LocalStreamCore::in_memory().expect("core should open"));
+        let response = authenticated_router(core)
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/health")
+                    .body(Body::empty())
+                    .expect("request should build"),
+            )
+            .await
+            .expect("request should succeed");
+
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn protected_routes_return_one_safe_response_for_missing_invalid_and_revoked_tokens() {
+        let core = Arc::new(LocalStreamCore::in_memory().expect("core should open"));
+        let issued = core
+            .issue_peer_credential("Revoked TV")
+            .expect("credential should issue");
+        core.revoke_peer(&issued.peer.id)
+            .expect("credential should revoke");
+        let credentials = [
+            None,
+            Some("Basic not-a-bearer"),
+            Some("Bearer ls_peer_invalid"),
+            Some(issued.bearer_token.as_str()),
+        ];
+        let mut expected_body = None;
+
+        for credential in credentials {
+            let mut builder = Request::builder().uri("/api/v1/library");
+            if let Some(credential) = credential {
+                builder = builder.header("authorization", credential);
+            }
+            let response = authenticated_router(Arc::clone(&core))
+                .oneshot(builder.body(Body::empty()).expect("request should build"))
+                .await
+                .expect("request should succeed");
+
+            assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+            assert_eq!(response.headers()["www-authenticate"], "Bearer");
+            let body = response_text(response).await;
+            assert!(body.contains("unauthorized"));
+            if let Some(expected) = &expected_body {
+                assert_eq!(&body, expected);
+            } else {
+                expected_body = Some(body);
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn protected_routes_reject_duplicate_authorization_headers() {
+        let core = Arc::new(LocalStreamCore::in_memory().expect("core should open"));
+        let issued = core
+            .issue_peer_credential("Living Room TV")
+            .expect("credential should issue");
+        let mut request = Request::builder()
+            .uri("/api/v1/library")
+            .body(Body::empty())
+            .expect("request should build");
+        request.headers_mut().append(
+            header::AUTHORIZATION,
+            HeaderValue::from_str(&format!("Bearer {}", issued.bearer_token))
+                .expect("header should build"),
+        );
+        request.headers_mut().append(
+            header::AUTHORIZATION,
+            HeaderValue::from_static("Bearer duplicate"),
+        );
+
+        let response = authenticated_router(core)
+            .oneshot(request)
+            .await
+            .expect("request should succeed");
+
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn valid_library_read_credential_accesses_library_and_peer_extension() {
+        let directory = tempdir().expect("temporary library should be created");
+        fs::write(directory.path().join("Authorized Movie.mp4"), b"video")
+            .expect("video should be created");
+        let core = Arc::new(LocalStreamCore::in_memory().expect("core should open"));
+        core.scan_and_persist_library(directory.path())
+            .expect("library should persist");
+        let issued = core
+            .issue_peer_credential("Living Room TV")
+            .expect("credential should issue");
+        let authorization = format!("Bearer {}", issued.bearer_token);
+
+        let response = authenticated_router(Arc::clone(&core))
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/library")
+                    .header("authorization", &authorization)
+                    .body(Body::empty())
+                    .expect("request should build"),
+            )
+            .await
+            .expect("request should succeed");
+        assert_eq!(response.status(), StatusCode::OK);
+        assert!(response_text(response).await.contains("Authorized Movie"));
+
+        async fn identity(Extension(peer): Extension<TrustedPeer>) -> Json<TrustedPeer> {
+            Json(peer)
+        }
+        let identity_router = Router::new().route("/identity", get(identity)).route_layer(
+            middleware::from_fn_with_state(Arc::clone(&core), require_library_read),
+        );
+        let response = identity_router
+            .oneshot(
+                Request::builder()
+                    .uri("/identity")
+                    .header("authorization", authorization)
+                    .body(Body::empty())
+                    .expect("request should build"),
+            )
+            .await
+            .expect("request should succeed");
+        let identity = response_text(response).await;
+        assert!(identity.contains("Living Room TV"));
+        assert!(!identity.contains("token"));
+    }
+
+    #[tokio::test]
+    async fn valid_credential_streams_an_authorized_byte_range() {
+        let (_directory, core, id) = persisted_media();
+        let issued = core
+            .issue_peer_credential("Bedroom Tablet")
+            .expect("credential should issue");
+        let response = authenticated_router(core)
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/api/v1/media/{id}/stream"))
+                    .header("authorization", format!("Bearer {}", issued.bearer_token))
+                    .header("range", "bytes=4-7")
+                    .body(Body::empty())
+                    .expect("request should build"),
+            )
+            .await
+            .expect("request should succeed");
+
+        assert_eq!(response.status(), StatusCode::PARTIAL_CONTENT);
+        assert_eq!(response.headers()["content-range"], "bytes 4-7/10");
+        let body = response
+            .into_body()
+            .collect()
+            .await
+            .expect("body should stream")
+            .to_bytes();
+        assert_eq!(&body[..], b"4567");
     }
 }

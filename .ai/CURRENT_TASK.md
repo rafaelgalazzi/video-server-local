@@ -2,11 +2,11 @@
 
 ## ID
 
-LS-010
+LS-011
 
 ## Title
 
-Trusted-peer administration and revocation
+Bearer authentication and library-read authorization
 
 ## Status
 
@@ -14,57 +14,53 @@ Completed
 
 ## Goal
 
-Let the local desktop user list active trusted peers and deliberately revoke their credentials using safe metadata only, persistent core behavior, thin Tauri adapters, and confirmation-based Vue state.
+Create a separately testable authenticated Axum router that protects library metadata and media streams with strict bearer credentials and `library.read`, while leaving the active desktop loopback router and listener unchanged.
 
 ## Acceptance Criteria
 
-- The core returns active peer summaries containing only opaque ID, display name, capability, and creation timestamp.
-- Token plaintext, token digests, filesystem paths, and revoked records never enter the peer-list response.
-- Revocation remains idempotent, persists across restart, removes the peer from active listings, and prevents authentication.
-- Thin Tauri commands expose only local peer listing and revocation.
-- A composable owns load/error/notice, confirmation selection, cancellation, and revocation state.
-- Revocation requires a distinct confirmation step and failed revocation retains the peer for retry.
-- An accessible component renders active peers, capability, paired date, empty/loading/error states, and confirmation-oriented controls.
-- Tests cover safe listing, persistent revocation, composable confirmation, success, failure retention, and cancellation.
-- No HTTP routes or bind changes are introduced.
+- A separate authenticated router exposes public health and protected library/stream routes.
+- Exactly one strict `Authorization: Bearer <token>` header is accepted.
+- Missing, malformed, unknown, and revoked credentials return the same safe `401` body and `WWW-Authenticate: Bearer` header.
+- Credential-store failures return the existing generic `500` without authentication details.
+- Successful authentication inserts safe peer identity into request extensions and requires `library.read`.
+- Valid credentials can read library metadata and stream byte ranges through existing thin handlers.
+- The current `router` and `start_local_server` behavior remain unauthenticated loopback-only for the desktop webview.
+- Negative and positive contract tests cover header parsing, invalid/revoked tokens, library access, and Range streaming.
+- API, security, server, test-matrix, and project documentation remain explicit that encrypted transport is still required.
+
+## Relevant Files
+
+- `crates/localstream-core/src/server/mod.rs`
+- `crates/localstream-core/src/auth/mod.rs`
+- `docs/api/README.md`
+- `docs/security/README.md`
+- `docs/development/TEST_MATRIX.md`
 
 ## Completed
 
-- Added SQLite active-peer listing ordered by creation/name and excluding revoked records.
-- Added safe `TrustedPeerSummary` serialization with only opaque ID, display name, `library.read`, and creation time.
-- Added core tests proving no token/digest/path fields, restart-persistent revocation, active-list removal, and idempotence.
-- Added thin local `trusted_peers` and `revoke_trusted_peer` Tauri commands.
-- Added `useTrustedPeers` with load, confirmation selection, cancellation, revocation, success notice, and failure retention.
-- Added four deterministic composable tests covering safe load, confirmation/cancellation, success, and retryable failure.
-- Added an accessible trusted-device panel with paired date, capability label, refresh, empty/loading/error states, and a separate alert-dialog confirmation step.
-- Updated root, core, database, Tauri, frontend, component, composable, security, and project documentation.
+- Added a separately composed authenticated router without changing the active desktop listener.
+- Enforced one strict bearer header, active credentials, and `library.read` on library and stream routes.
+- Added uniform safe unauthorized responses and generic handling for credential-store failures.
+- Inserted safe authenticated peer identity into request extensions.
+- Added positive and negative contract tests for authentication, library access, and ranged streaming.
+- Updated API, security, server, test-matrix, deferred-decision, and project documentation.
+- Completed frontend and Rust verification.
 
-## Tests Last Executed
+## In Progress
 
-- `npm run verify` — PASS; format, lint, typecheck, 6 files / 21 frontend tests, and production build passed.
-- `cargo fmt --all --check` — PASS.
-- `cargo clippy --workspace --all-targets --all-features -- -D warnings` — PASS.
-- `cargo test --workspace` — PASS; 28 core/workspace tests passed.
-- `cargo check --workspace` — PASS.
-- `git diff --check` — PASS before final task/handoff documentation update.
+- Nothing.
 
-## Tests Not Yet Executed
+## Remaining
 
-- Interactive Windows Tauri trusted-peer refresh, confirmation, cancellation, and revocation.
-- Screen-reader and keyboard focus behavior in the target Windows webview.
-- Non-Windows platforms.
-
-## Known Problems
-
-- None confirmed for the LS-010 automated scope.
+- Nothing for LS-011.
 
 ## Assumptions
 
-- Revoked records remain stored so their old credentials continue to receive revoked semantics.
-- Active UI listings intentionally exclude revoked records.
-- Unix creation seconds are safe as JavaScript numbers for relevant dates.
-- ADR-0006 continues to prohibit LAN binding.
+- The authenticated router is a dormant reusable foundation and is not served by `start_local_server` in LS-011.
+- `library.read` is the only current peer capability; middleware still checks it explicitly.
+- Remote browser media elements cannot attach arbitrary bearer headers; the eventual encrypted browser session/signed-stream strategy remains a later design decision.
+- ADR-0006 continues to prohibit LAN binding and plaintext credential transport.
 
 ## Next Exact Step
 
-Define LS-011 for bearer-token extraction and `library.read` authorization middleware tested on a protected loopback router while preserving the existing local desktop router and bind behavior.
+Start LS-012 by documenting the authenticated encrypted LAN server identity and transport design before implementing or enabling any remote listener.

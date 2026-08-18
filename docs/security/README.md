@@ -12,7 +12,9 @@ This document combines implemented safeguards with requirements for unimplemente
 - Trusted-local Tauri adapters can only list, approve, or reject requests. They cannot create requests or claim credentials.
 - The local Vue interface polls pending requests after native startup, warns users to compare codes, and exposes explicit Allow/Reject actions with retryable failure state.
 - Trusted-peer administration exposes only opaque ID, display name, `library.read`, and creation time. Revocation requires a separate confirmation step, persists across restart, and immediately invalidates authentication.
-- Pairing HTTP endpoints, client secret storage, network rate limiting, and LAN authentication middleware are not yet implemented.
+- A dormant authenticated Axum router accepts exactly one strict bearer header, authenticates through the core, inserts safe peer identity, and protects library/stream routes with `library.read`.
+- Missing, malformed, unknown, and revoked credentials receive the same safe `401`; the active desktop listener still uses the loopback-only local router.
+- Pairing HTTP endpoints, client secret storage, encrypted transport, and network rate limiting are not yet implemented.
 
 ### Threat Model
 
@@ -23,7 +25,7 @@ This document combines implemented safeguards with requirements for unimplemente
 | Bearer credential in transit | Passive capture and replay                             | Credentials never traverse the LAN                                                                                      | Encrypted channel with authenticated server identity                           |
 | SQLite credential store      | Database disclosure exposes reusable secrets           | Only SHA-256 digests are stored; tokens have 256 random bits                                                            | Protect application data using platform controls and avoid backups/log leakage |
 | Trusted client               | Client secret theft or loss                            | Local peer listing and confirmation-based persistent revocation                                                         | Platform-appropriate secure client storage                                     |
-| Authorization                | Valid peer invokes excessive capabilities              | Only explicit `library.read` exists and unknown values fail closed                                                      | Route-level capability middleware and negative tests                           |
+| Authorization                | Valid peer invokes excessive capabilities              | Separate router enforces strict bearer authentication and `library.read` with negative tests                            | Activate only behind encrypted transport; add future capabilities fail-closed  |
 | Local adapter                | Untrusted remote input invokes credential issuance     | Tauri and Vue expose only list/approve/reject; issuance requires an approved high-entropy claim                         | Keep request creation/claim off the Tauri surface                              |
 
 ### Planned Route Policy
@@ -78,6 +80,8 @@ Persistence and future streaming routes must resolve opaque IDs against trusted 
 LAN binding must not be enabled until requests are authenticated under an implemented trust model.
 
 Credential persistence alone does not satisfy this gate. ADR-0006 requires encrypted transport, explicit approval, protected routes, rate limits, revocation controls, and negative security tests before any non-loopback bind.
+
+LS-011 satisfies the protected-route and negative-authentication test portion only. It does not authorize enabling LAN binding because credentials would still cross plaintext HTTP and the browser stream-session mechanism is unresolved.
 
 ## Processes and Resources
 
