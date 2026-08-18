@@ -15,11 +15,15 @@ Own revocable peer credential generation and verification independently of Tauri
 - In-memory pairing requests limited to 32 active entries and two-minute monotonic lifetimes.
 - Cryptographic request IDs and 256-bit claim secrets plus six-digit human verification codes.
 - Explicit approval/rejection and single-use credential claiming with replay tombstones.
+- Fixed-window pairing-attempt limits per normalized source IP and globally, with bounded source memory.
+- Persistent 24-hour browser sessions with digest-only storage and peer-bound revocation.
 
 ## Important Files
 
 - `mod.rs`: credential lifecycle, safe peer models, validation, and authentication errors.
 - `pairing.rs`: bounded request lifecycle, local decisions, expiration, and single-use claim behavior.
+- `rate_limit.rs`: separate begin/claim policies, safe retry decisions, normalization, cleanup, and fail-closed state.
+- `session.rs`: opaque browser session issuance, validation, expiry pruning, and safe cookie constants.
 
 ## Public Interfaces
 
@@ -28,6 +32,8 @@ Own revocable peer credential generation and verification independently of Tauri
 - `LocalStreamCore::revoke_peer`: persistent revocation by opaque peer ID.
 - `LocalStreamCore::trusted_peers`: safe active-peer administration view.
 - `LocalStreamCore` pairing methods: begin, list pending, approve, reject, and claim.
+- `LocalStreamCore::check_pairing_attempt`: reusable transport-facing limiter decision based on the actual peer socket address.
+- `LocalStreamCore::authenticate_browser_session`: validates digest-only sessions and their active peer/capability binding.
 
 ## Dependencies
 
@@ -35,8 +41,8 @@ Operating-system randomness through `getrandom`, URL-safe Base64 encoding, SHA-2
 
 ## Limitations
 
-No HTTP pairing endpoints, approval UI, network rate limiting, LAN binding, or transport encryption exist. Pairing requests intentionally disappear on restart. Credentials must not cross a LAN until channel protection and authenticated routes are implemented.
+Native and browser pairing claim endpoints exist only in the separate loopback HTTPS lifecycle and use the limiter plus local approval. Browser sessions survive restart, expire after 24 hours, and are invalidated with their peer. Pairing requests intentionally disappear on restart. LAN binding and unsafe cookie-authenticated methods remain unavailable.
 
 ## Planned Work
 
-Add the local approval UI, then design encrypted request/claim routes with rate limiting before LAN exposure.
+Add strict HTTPS origin/fetch-metadata policy and transport resource limits before LAN exposure.

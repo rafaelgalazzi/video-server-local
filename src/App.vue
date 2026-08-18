@@ -2,12 +2,14 @@
 import { onMounted, onUnmounted, watch } from 'vue'
 import FoundationStatus from './components/FoundationStatus.vue'
 import MediaLibraryPanel from './components/MediaLibraryPanel.vue'
+import NodeIdentityPanel from './components/NodeIdentityPanel.vue'
 import PairingRequestsPanel from './components/PairingRequestsPanel.vue'
 import PlaybackPanel from './components/PlaybackPanel.vue'
 import ServerStatus from './components/ServerStatus.vue'
 import TrustedPeersPanel from './components/TrustedPeersPanel.vue'
 import { useAppInfo } from './composables/useAppInfo'
 import { useMediaLibrary } from './composables/useMediaLibrary'
+import { useNodeIdentity } from './composables/useNodeIdentity'
 import { usePlayback } from './composables/usePlayback'
 import { usePairingRequests } from './composables/usePairingRequests'
 import { useServerStatus } from './composables/useServerStatus'
@@ -15,6 +17,7 @@ import { useTrustedPeers } from './composables/useTrustedPeers'
 
 const { appInfo, error, isLoading, load, runtimeLabel } = useAppInfo()
 const mediaLibrary = useMediaLibrary()
+const nodeIdentity = useNodeIdentity()
 const serverStatus = useServerStatus()
 const playback = usePlayback(serverStatus.server)
 const pairing = usePairingRequests()
@@ -36,6 +39,7 @@ async function selectLibrary() {
 onMounted(() => {
   void load()
   void mediaLibrary.loadCurrentLibrary()
+  void nodeIdentity.load()
   void serverStatus.load()
   void pairing.startPolling()
   void trustedPeers.load()
@@ -89,6 +93,20 @@ onUnmounted(() => pairing.stopPolling())
         :error="serverStatus.error.value"
         :server="serverStatus.server.value"
         :status-label="serverStatus.statusLabel.value"
+      />
+
+      <NodeIdentityPanel
+        :error="nodeIdentity.error.value"
+        :identity="nodeIdentity.identity.value"
+        :is-confirming-reset="nodeIdentity.isConfirmingReset.value"
+        :is-exporting="nodeIdentity.isExporting.value"
+        :is-resetting="nodeIdentity.isResetting.value"
+        :notice="nodeIdentity.notice.value"
+        :status-label="nodeIdentity.statusLabel.value"
+        @cancel-reset="nodeIdentity.cancelReset"
+        @confirm-reset="nodeIdentity.confirmReset"
+        @export-certificate="nodeIdentity.exportRootCertificate"
+        @reset="nodeIdentity.requestReset"
       />
 
       <PairingRequestsPanel

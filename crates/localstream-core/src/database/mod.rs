@@ -8,7 +8,7 @@ use thiserror::Error;
 
 use crate::media::{LibraryScan, ScannedLibrary};
 
-const SCHEMA_VERSION: i64 = 2;
+const SCHEMA_VERSION: i64 = 3;
 
 #[derive(Debug)]
 pub(crate) struct LibraryDatabase {
@@ -29,6 +29,26 @@ pub(crate) struct TrustedPeerRecord {
     pub capability: String,
     pub created_at: i64,
     pub revoked: bool,
+}
+
+#[derive(Debug)]
+pub(crate) struct BrowserSessionRecord {
+    pub peer_id: String,
+    pub display_name: String,
+    pub capability: String,
+    pub expires_at: i64,
+    pub session_revoked: bool,
+    pub peer_revoked: bool,
+}
+
+pub(crate) struct NewBrowserSession<'a> {
+    pub peer_id: &'a str,
+    pub display_name: &'a str,
+    pub peer_token_digest: &'a [u8; 32],
+    pub capability: &'a str,
+    pub session_digest: &'a [u8; 32],
+    pub created_at: i64,
+    pub expires_at: i64,
 }
 
 #[derive(Debug, Error)]
@@ -89,8 +109,17 @@ impl LibraryDatabase {
                    created_at INTEGER NOT NULL,
                    revoked INTEGER NOT NULL DEFAULT 0 CHECK (revoked IN (0, 1))
                  );
+                 CREATE TABLE browser_sessions (
+                   token_digest BLOB PRIMARY KEY CHECK (length(token_digest) = 32),
+                   peer_id TEXT NOT NULL REFERENCES trusted_peers(id) ON DELETE CASCADE,
+                   capability TEXT NOT NULL,
+                   created_at INTEGER NOT NULL,
+                   expires_at INTEGER NOT NULL CHECK (expires_at > created_at),
+                   revoked INTEGER NOT NULL DEFAULT 0 CHECK (revoked IN (0, 1))
+                 );
+                 CREATE INDEX browser_sessions_peer_id ON browser_sessions(peer_id);
                  INSERT INTO app_state(singleton, current_library_id) VALUES (1, NULL);
-                 PRAGMA user_version = 2;
+                 PRAGMA user_version = 3;
                  COMMIT;",
                 )
                 .map_err(|_| DatabaseError::Unavailable)?,
@@ -105,7 +134,32 @@ impl LibraryDatabase {
                        created_at INTEGER NOT NULL,
                        revoked INTEGER NOT NULL DEFAULT 0 CHECK (revoked IN (0, 1))
                      );
-                     PRAGMA user_version = 2;
+                     CREATE TABLE browser_sessions (
+                       token_digest BLOB PRIMARY KEY CHECK (length(token_digest) = 32),
+                       peer_id TEXT NOT NULL REFERENCES trusted_peers(id) ON DELETE CASCADE,
+                       capability TEXT NOT NULL,
+                       created_at INTEGER NOT NULL,
+                       expires_at INTEGER NOT NULL CHECK (expires_at > created_at),
+                       revoked INTEGER NOT NULL DEFAULT 0 CHECK (revoked IN (0, 1))
+                     );
+                     CREATE INDEX browser_sessions_peer_id ON browser_sessions(peer_id);
+                     PRAGMA user_version = 3;
+                     COMMIT;",
+                )
+                .map_err(|_| DatabaseError::Unavailable)?,
+            2 => connection
+                .execute_batch(
+                    "BEGIN IMMEDIATE;
+                     CREATE TABLE browser_sessions (
+                       token_digest BLOB PRIMARY KEY CHECK (length(token_digest) = 32),
+                       peer_id TEXT NOT NULL REFERENCES trusted_peers(id) ON DELETE CASCADE,
+                       capability TEXT NOT NULL,
+                       created_at INTEGER NOT NULL,
+                       expires_at INTEGER NOT NULL CHECK (expires_at > created_at),
+                       revoked INTEGER NOT NULL DEFAULT 0 CHECK (revoked IN (0, 1))
+                     );
+                     CREATE INDEX browser_sessions_peer_id ON browser_sessions(peer_id);
+                     PRAGMA user_version = 3;
                      COMMIT;",
                 )
                 .map_err(|_| DatabaseError::Unavailable)?,
@@ -289,6 +343,102 @@ impl LibraryDatabase {
             .map_err(|_| DatabaseError::Unavailable)
     }
 
+    pub(crate) fn insert_browser_peer_and_session(
+        &self,
+        session: &NewBrowserSession<'_>,
+    ) -> Result<(), DatabaseError> {
+        let mut connection = self
+            .connection
+            .lock()
+            .map_err(|_| DatabaseError::Unavailable)?;
+        let transaction = connection
+            .transaction()
+            .map_err(|_| DatabaseError::Unavailable)?;
+        transaction
+            .execute(
+                "INSERT INTO trusted_peers(id, display_name, token_digest, capability, created_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![
+                    session.peer_id,
+                    session.display_name,
+                    session.peer_token_digest,
+                    session.capability,
+                    session.created_at
+                ],
+            )
+            .map_err(|_| DatabaseError::Unavailable)?;
+        transaction
+            .execute(
+                "INSERT INTO browser_sessions(
+                   token_digest, peer_id, capability, created_at, expires_at
+                 ) VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![
+                    session.session_digest,
+                    session.peer_id,
+                    session.capability,
+                    session.created_at,
+                    session.expires_at
+                ],
+            )
+            .map_err(|_| DatabaseError::Unavailable)?;
+        transaction.commit().map_err(|_| DatabaseError::Unavailable)
+    }
+
+    pub(crate) fn browser_session_by_digest(
+        &self,
+        token_digest: &[u8; 32],
+    ) -> Result<Option<BrowserSessionRecord>, DatabaseError> {
+        self.connection
+            .lock()
+            .map_err(|_| DatabaseError::Unavailable)?
+            .query_row(
+                "SELECT trusted_peers.id, trusted_peers.display_name,
+                        browser_sessions.capability, browser_sessions.expires_at,
+                        browser_sessions.revoked, trusted_peers.revoked
+                 FROM browser_sessions
+                 JOIN trusted_peers ON trusted_peers.id = browser_sessions.peer_id
+                 WHERE browser_sessions.token_digest = ?1",
+                [token_digest.as_slice()],
+                |row| {
+                    Ok(BrowserSessionRecord {
+                        peer_id: row.get(0)?,
+                        display_name: row.get(1)?,
+                        capability: row.get(2)?,
+                        expires_at: row.get(3)?,
+                        session_revoked: row.get(4)?,
+                        peer_revoked: row.get(5)?,
+                    })
+                },
+            )
+            .optional()
+            .map_err(|_| DatabaseError::Unavailable)
+    }
+
+    pub(crate) fn prune_expired_browser_sessions(&self, now: i64) -> Result<usize, DatabaseError> {
+        self.connection
+            .lock()
+            .map_err(|_| DatabaseError::Unavailable)?
+            .execute("DELETE FROM browser_sessions WHERE expires_at <= ?1", [now])
+            .map_err(|_| DatabaseError::Unavailable)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_browser_session_capability(
+        &self,
+        token_digest: &[u8; 32],
+        capability: &str,
+    ) -> Result<(), DatabaseError> {
+        self.connection
+            .lock()
+            .map_err(|_| DatabaseError::Unavailable)?
+            .execute(
+                "UPDATE browser_sessions SET capability = ?2 WHERE token_digest = ?1",
+                params![token_digest, capability],
+            )
+            .map(|_| ())
+            .map_err(|_| DatabaseError::Unavailable)
+    }
+
     pub(crate) fn peer_by_digest(
         &self,
         token_digest: &[u8; 32],
@@ -343,15 +493,52 @@ impl LibraryDatabase {
     }
 
     pub(crate) fn revoke_peer(&self, peer_id: &str) -> Result<bool, DatabaseError> {
-        self.connection
+        let mut connection = self
+            .connection
             .lock()
-            .map_err(|_| DatabaseError::Unavailable)?
+            .map_err(|_| DatabaseError::Unavailable)?;
+        let transaction = connection
+            .transaction()
+            .map_err(|_| DatabaseError::Unavailable)?;
+        let changed = transaction
             .execute(
                 "UPDATE trusted_peers SET revoked = 1 WHERE id = ?1 AND revoked = 0",
                 [peer_id],
             )
-            .map(|changed| changed == 1)
-            .map_err(|_| DatabaseError::Unavailable)
+            .map_err(|_| DatabaseError::Unavailable)?;
+        transaction
+            .execute(
+                "UPDATE browser_sessions SET revoked = 1 WHERE peer_id = ?1 AND revoked = 0",
+                [peer_id],
+            )
+            .map_err(|_| DatabaseError::Unavailable)?;
+        transaction
+            .commit()
+            .map_err(|_| DatabaseError::Unavailable)?;
+        Ok(changed == 1)
+    }
+
+    pub(crate) fn revoke_all_peers(&self) -> Result<usize, DatabaseError> {
+        let mut connection = self
+            .connection
+            .lock()
+            .map_err(|_| DatabaseError::Unavailable)?;
+        let transaction = connection
+            .transaction()
+            .map_err(|_| DatabaseError::Unavailable)?;
+        let changed = transaction
+            .execute("UPDATE trusted_peers SET revoked = 1 WHERE revoked = 0", [])
+            .map_err(|_| DatabaseError::Unavailable)?;
+        transaction
+            .execute(
+                "UPDATE browser_sessions SET revoked = 1 WHERE revoked = 0",
+                [],
+            )
+            .map_err(|_| DatabaseError::Unavailable)?;
+        transaction
+            .commit()
+            .map_err(|_| DatabaseError::Unavailable)?;
+        Ok(changed)
     }
 }
 
@@ -437,5 +624,56 @@ mod tests {
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .expect("schema version should load");
         assert_eq!(version, SCHEMA_VERSION);
+    }
+
+    #[test]
+    fn migrates_version_two_with_peers_and_adds_browser_sessions() {
+        let workspace = tempdir().expect("temporary workspace should exist");
+        let path = workspace.path().join("version-two.sqlite3");
+        let connection = Connection::open(&path).expect("database should open");
+        connection
+            .execute_batch(
+                "CREATE TABLE libraries (
+                   id TEXT PRIMARY KEY, name TEXT NOT NULL,
+                   root_path TEXT NOT NULL UNIQUE, skipped_entries INTEGER NOT NULL DEFAULT 0
+                 );
+                 CREATE TABLE media_items (
+                   id TEXT PRIMARY KEY, library_id TEXT NOT NULL REFERENCES libraries(id),
+                   path TEXT NOT NULL UNIQUE, title TEXT NOT NULL,
+                   extension TEXT NOT NULL, size_bytes INTEGER NOT NULL
+                 );
+                 CREATE TABLE app_state (
+                   singleton INTEGER PRIMARY KEY, current_library_id TEXT
+                 );
+                 CREATE TABLE trusted_peers (
+                   id TEXT PRIMARY KEY, display_name TEXT NOT NULL,
+                   token_digest BLOB NOT NULL UNIQUE CHECK (length(token_digest) = 32),
+                   capability TEXT NOT NULL, created_at INTEGER NOT NULL,
+                   revoked INTEGER NOT NULL DEFAULT 0 CHECK (revoked IN (0, 1))
+                 );
+                 INSERT INTO app_state VALUES (1, NULL);
+                 INSERT INTO trusted_peers VALUES (
+                   'peer-1', 'Existing Peer', zeroblob(32), 'library.read', 1000, 0
+                 );
+                 PRAGMA user_version = 2;",
+            )
+            .expect("version two schema should be created");
+        drop(connection);
+
+        let database = LibraryDatabase::open(&path).expect("database should migrate");
+        assert_eq!(database.active_peers().expect("peers should load").len(), 1);
+        let connection = database.connection.lock().expect("database should lock");
+        let version: i64 = connection
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .expect("schema version should load");
+        let session_table: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'browser_sessions'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("session table should query");
+        assert_eq!(version, SCHEMA_VERSION);
+        assert_eq!(session_table, 1);
     }
 }

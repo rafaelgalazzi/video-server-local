@@ -16,8 +16,18 @@ This document combines implemented safeguards with requirements for unimplemente
 - Missing, malformed, unknown, and revoked credentials receive the same safe `401`; the active desktop listener still uses the loopback-only local router.
 - ADR-0007 requires a persistent private node CA: native clients pin its verified public-key fingerprint, while browser devices explicitly install it into their trust store after trusted-local fingerprint comparison.
 - The LS-013 core service generates/restores a P-256 CA key through an injected secret-store boundary, derives stable public identity from its SPKI, and fails closed for corrupt or unavailable protected storage. Its platform adapter targets Windows Credential Manager, Apple Keychain, and Linux Secret Service.
+- Desktop startup restores that identity before starting the loopback server and retains only its public summary. Explicit local reset first revokes all active peer credentials, then deletes the protected root; deletion failure leaves peers revoked and never creates a silent replacement.
+- The node identity can issue fresh P-256 TLS server keys with 30-day root-signed leaves for at most 16 validated explicit DNS/IP names. Wildcards, duplicates, malformed names, client-auth usage, and CA usage are rejected or absent by construction; no listener consumes the material yet.
+- Issued leaf material is consumed directly into Rustls configured for TLS 1.3/1.2, no client certificates, and HTTP/1.1 ALPN. In-memory handshakes verify trusted-root/name success and wrong-root/name rejection; no socket consumes the configuration yet.
+- A separate authenticated HTTPS lifecycle is verified on ephemeral loopback sockets for trusted health/library requests, bearer enforcement, wrong-root/name rejection, plaintext downgrade rejection, graceful shutdown, and listener release. Desktop startup still uses only its original trusted-local HTTP listener.
+- Trusted-local root export reloads only an existing identity, verifies it matches the startup summary, and writes public DER through a native save dialog without returning bytes or paths to Vue. Guidance requires full-fingerprint comparison; LocalStream does not install trust automatically or offer a remote CA download.
+- Pairing-attempt rate limiting defines independent begin/claim windows, per-source and global quotas, actual-socket IP normalization, 1,024-source bounded memory, stale cleanup, safe retry seconds, and fail-closed poisoned state.
+- HTTPS-only pairing routes apply those limits before strict 2 KiB JSON parsing, require the existing trusted-local approval, issue one native bearer credential, and return uniform failed-claim/replay responses. Forged forwarding headers do not affect the source bucket; the active HTTP listener has no pairing routes.
+- Browser claims consume the same approved single-use exchange and return no secret body, setting only a `__Host-` 24-hour `HttpOnly; Secure; SameSite=Strict; Path=/` cookie. SQLite stores its SHA-256 digest and peer/capability/expiry/revocation binding; peer revocation and identity reset invalidate sessions transactionally.
+- The HTTPS router requires exactly one configured Host on all requests. Pairing POSTs require one exact same-origin Origin and, when supplied, `Sec-Fetch-Site: same-origin` or `none`; all invalid variants fail uniformly before rate limits or pairing state. Forwarded authority metadata is ignored.
+- The HTTPS accept loop holds a semaphore permit for each connection, caps concurrency at 64, limits TLS handshakes to five seconds, and drops excess or stalled connections without plaintext fallback.
 - The future browser UI, API, and media routes share one HTTPS origin. Browser pairing establishes a revocable `HttpOnly`, `Secure`, `SameSite=Strict` session cookie; credentials are not placed in JavaScript storage or media URLs.
-- Pairing HTTP endpoints, client secret storage, encrypted transport, and network rate limiting are not yet implemented.
+- Client secret storage, same-origin static UI hosting, and LAN activation are not yet implemented.
 
 ### Threat Model
 
@@ -84,9 +94,9 @@ LAN binding must not be enabled until requests are authenticated under an implem
 
 Credential persistence alone does not satisfy this gate. ADR-0006 requires encrypted transport, explicit approval, protected routes, rate limits, revocation controls, and negative security tests before any non-loopback bind.
 
-LS-011 satisfies the protected-route and negative-authentication test portion only. It does not authorize enabling LAN binding because credentials would still cross plaintext HTTP and the ADR-0007 browser-session mechanism is unimplemented.
+LS-011 established the protected-route and negative-authentication foundation. LS-013 through LS-023 subsequently added the separate loopback TLS and browser-session foundation, but the active desktop listener remains trusted-local HTTP and LAN binding is still prohibited.
 
-ADR-0007 resolves the intended transport and initial browser-session architecture. LS-013 implements only the reusable root-identity and storage boundary; it is not integrated into startup. LAN binding remains prohibited until TLS, trust onboarding, encrypted pairing, session, CSRF/origin, rate-limit, and negative-test gates are complete.
+ADR-0007 resolves the intended transport and initial browser-session architecture. LS-013 through LS-023 implement loopback-tested encrypted native/browser pairing, revocable secure sessions, strict pairing origin checks, and transport resource limits. LAN binding remains prohibited until static hosting, client-side trust/secret handling, and remaining negative-test gates are complete. CSRF tokens become required if unsafe authenticated browser methods are introduced.
 
 ## Processes and Resources
 

@@ -9,15 +9,19 @@ rust-version.workspace = true
 axum = "0.8"
 base64 = "0.22"
 getrandom = "0.3"
+hyper = { version = "1", features = ["client", "http1", "server"] }
+hyper-util = { version = "0.1", features = ["http1", "server", "server-graceful", "service", "tokio"] }
 keyring = { version = "=3.6.3", features = ["apple-native", "crypto-rust", "linux-native-sync-persistent", "windows-native"] }
 rcgen = { version = "=0.14.7", features = ["zeroize"] }
 rusqlite = { version = "0.37", features = ["bundled"] }
+rustls = { version = "=0.23.37", default-features = false, features = ["ring", "std", "tls12"] }
 serde.workspace = true
 sha2 = "0.10"
 subtle = "2"
 thiserror = "2"
 time = "=0.3.36"
-tokio = { version = "1", features = ["fs", "io-util", "net", "rt", "sync"] }
+tokio = { version = "1", features = ["fs", "io-util", "net", "rt", "sync", "time"] }
+tokio-rustls = { version = "=0.26.4", default-features = false, features = ["ring", "tls12"] }
 tokio-util = { version = "0.7", features = ["io"] }
 uuid = { version = "1", features = ["v4", "v5"] }
 walkdir = "2"
@@ -27,3 +31,4 @@ http-body-util = "0.1"
 serde_json = "1"
 tempfile = "3"
 tower = { version = "0.5", features = ["util"] }
+x509-parser = { version = "=0.18.1", features = ["verify"] }

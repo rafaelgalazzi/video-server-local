@@ -33,6 +33,28 @@ The server currently binds to `127.0.0.1` on an ephemeral port. The Tauri `serve
 
 Bearer authentication does not make plaintext HTTP safe. ADR-0007 selects separate future credential transports: native clients use bearer authorization over pinned TLS, while the same-origin browser UI and native media requests use a revocable secure HttpOnly session cookie. DD-007 records why credentials and signed secrets must not appear in media URLs.
 
+## Encrypted Pairing Foundation
+
+The separate loopback HTTPS lifecycle adds these native-client contracts; they are absent from the active trusted-local HTTP listener:
+
+- `POST /api/v1/pairing/requests`
+
+  Accepts up to 2 KiB of strict JSON containing only `displayName`. Returns `requestId`, `claimSecret`, `verificationCode`, and `expiresInSeconds`. The same verification code appears in the trusted-local approval UI.
+
+- `POST /api/v1/pairing/claims`
+
+  Accepts strict JSON containing only `requestId` and `claimSecret`. After explicit local approval it returns one `peer` summary and `bearerToken`; the request is then permanently replay-protected in the in-memory lifetime. Failed claims return one uniform `pairing_claim_failed` response.
+
+Both endpoints use the accepted socket IP for separate begin/claim per-source and global limits. `X-Forwarded-For` is ignored. Limited responses use `429`, an integer `Retry-After`, and the standard error envelope. These routes do not authorize LAN binding and are not the browser credential mechanism.
+
+Every HTTPS request requires exactly one Host matching the listener's configured `localhost` or loopback-IP authority. Pairing POSTs additionally require exactly one matching HTTPS `Origin`. Missing, duplicate, malformed, `null`, plaintext, and foreign origins return the same safe `403`; optional `Sec-Fetch-Site` permits only `same-origin` or `none`. `Forwarded` and `X-Forwarded-*` headers are ignored. These checks run before pairing rate or service capacity is consumed.
+
+- `POST /api/v1/pairing/browser-claims`
+
+  Accepts the same approved single-use request ID and claim secret, returns `204 No Content`, and sets `__Host-localstream_session` with `HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=86400`. It returns no token, peer, or credential JSON and sets no `Domain` attribute. The session cookie authenticates safe library/media GET requests and is invalidated by expiry or peer revocation.
+
+Browser sessions are persisted only as SHA-256 digests. Supplying both bearer and session credentials, duplicate cookie headers, duplicate session cookie names, malformed tokens, expired/revoked sessions, and unknown capabilities all fail through the uniform authorization response.
+
 ## Planned Convention
 
 Versioned REST endpoints use the `/api/v1/` prefix. Streaming and event endpoints must be documented here when their contracts are implemented. HTTP handlers remain thin adapters to reusable Rust services.
@@ -41,12 +63,12 @@ Do not expose raw filesystem paths. Public media access must use opaque identifi
 
 ## Planned
 
-- Expiring, rate-limited pairing request/confirmation routes with explicit local approval.
+- Same-origin browser UI hosting and unsafe-method CSRF protection.
 - Static browser UI hosting.
 - Event transport.
 
 Planned routes are not contracts until implemented, tested, and recorded here.
 
-The core can run bounded, expiring, explicitly approved pairing requests and issue/revoke peer credentials, but no pairing or credential HTTP API is exposed. ADR-0006 prohibits transmitting pairing claim secrets or bearer credentials over plaintext LAN HTTP or changing the bind address before encrypted transport and route-authorization gates are satisfied.
+The core can run bounded, expiring, explicitly approved pairing requests and its separate HTTPS lifecycle can issue native bearer credentials. ADR-0006 prohibits exposing these routes over plaintext or changing the bind address before every remaining transport/session gate is satisfied.
 
-ADR-0007 defines the future private-PKI HTTPS origin and browser-session policy. It is a design contract, not an implemented route or permission to bind on the LAN.
+ADR-0007's private-PKI loopback HTTPS origin, encrypted pairing, and browser-session foundation are implemented and tested. This is not permission to bind on the LAN; static UI hosting, client storage, and the remaining release gates are still absent.

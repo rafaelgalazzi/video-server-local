@@ -6,7 +6,7 @@ Contains desktop entry points and thin Tauri command adapters.
 
 ## Features and Interfaces
 
-- `lib.rs`: initializes the database-backed core and embedded server, then registers thin status, library, approved-folder, pairing-decision, and trusted-peer administration adapters.
+- `lib.rs`: initializes the database-backed core, protected node identity, and embedded server, then registers thin trusted-local adapters.
 - `main.rs`: invokes the library runner.
 
 ## Dependencies
@@ -15,4 +15,4 @@ Tauri and `localstream-core`.
 
 ## Current Limitations and Planned Work
 
-Pairing commands can list pending requests and approve or reject them locally; they cannot create requests or claim credentials. Peer commands expose safe active summaries and idempotent revocation. Remote encrypted transport does not exist.
+Node-identity commands expose only a cloned public summary and a restart-required reset result. Root export uses a native save dialog and writes public DER directly without returning certificate bytes or a path to Vue. Automatic trust installation and remote certificate download do not exist.

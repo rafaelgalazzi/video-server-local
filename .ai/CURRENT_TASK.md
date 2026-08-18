@@ -2,11 +2,11 @@
 
 ## ID
 
-LS-013
+LS-023
 
 ## Title
 
-Persistent node-root identity and protected storage
+Strict HTTPS origin policy and transport resource limits
 
 ## Status
 
@@ -14,36 +14,38 @@ Completed
 
 ## Goal
 
-Implement a reusable fail-closed node-root identity service with stable non-secret identity, platform protected-key storage, and deterministic lifecycle tests without adding TLS serving or LAN binding.
+Harden the separate HTTPS lifecycle with strict request authority/origin and Fetch Metadata validation for pairing POSTs, bounded concurrent TLS connections, and handshake timeouts while remaining loopback-only.
 
 ## Acceptance Criteria
 
-- A reusable core module generates a CA-capable P-256 root key and certificate.
-- Stable node ID and display fingerprint derive from the root SubjectPublicKeyInfo.
-- Private PKCS#8 material crosses only a narrow secret-store boundary and is never serializable or debugged.
-- A platform adapter targets Windows Credential Manager, Apple Keychain, and Linux Secret Service.
-- Missing identity is generated and stored before being returned.
-- Existing identity restores the same node ID and fingerprint across service reconstruction.
-- Corrupt or unavailable storage fails closed without silent identity replacement.
-- Unit tests use an injected in-memory store and do not mutate the developer's OS keyring.
-- No HTTP route, TLS listener, Tauri command, certificate installation, identity reset, or bind change is introduced.
+- HTTPS requests require one valid Host authority matching the listener's configured origin names/address.
+- Pairing POSTs require an exact same-origin `Origin`; missing, duplicate, malformed, `null`, HTTP, or foreign origins fail uniformly.
+- `Sec-Fetch-Site`, when present, permits only `same-origin` or `none`; cross-site values fail.
+- Forwarded host/proto/origin headers are ignored.
+- Rejected origin/authority requests do not consume pairing service capacity or issue secrets.
+- Concurrent accepted TLS connections are capped by a core-owned semaphore.
+- TLS handshakes have a short timeout and stalled clients release capacity.
+- Excess connections fail closed without reaching Axum or receiving plaintext HTTP.
+- Tests cover valid/invalid origin matrix, forged forwarding headers, duplicate headers, connection saturation, timeout recovery, and unchanged safe GET behavior.
+- Browser cookie authentication remains limited to safe GET routes; no CSRF token is needed until an unsafe authenticated browser method exists.
+- Desktop startup, trusted-local HTTP, static hosting, and LAN binding remain unchanged.
 
 ## Relevant Files
 
-- `crates/localstream-core/src/node_identity/mod.rs`
-- `crates/localstream-core/src/node_identity/README.md`
-- `crates/localstream-core/Cargo.toml`
-- `Cargo.lock`
+- `crates/localstream-core/src/server/mod.rs`
+- `crates/localstream-core/src/server/README.md`
+- `docs/api/README.md`
 - `docs/security/README.md`
-- `.ai/PROJECT_STATUS.md`
+- `docs/architecture/adr/0007-private-pki-and-https-origin.md`
 
 ## Completed
 
-- Reviewed LS-012, ADR-0007, existing persistence patterns, server boundaries, and platform startup.
-- Evaluated current compatible `rcgen` and `keyring` releases against the workspace Rust 1.77.2 requirement.
-- Added the initial identity service, public summary, keyring adapter, and fail-closed lifecycle tests.
-- Pinned the new certificate time dependency to a Rust-1.77-compatible release and recorded broader pre-existing MSRV drift as TD-001.
-- Verified all frontend and Rust checks with 21 frontend tests and 36 Rust tests.
+- LS-022 implemented persistent revocable secure browser sessions.
+- HTTPS requires exactly one listener-matching Host authority.
+- Pairing POSTs enforce exact same-origin Origin and safe Fetch Metadata before rate limiting or pairing work.
+- Forged forwarding headers do not affect authority, origin, or source identity decisions.
+- TLS accepts are capped at 64 concurrent connections with a five-second handshake timeout and fail-closed saturation.
+- Focused authority/origin, saturation, and timeout-recovery tests pass.
 
 ## In Progress
 
@@ -51,14 +53,14 @@ Implement a reusable fail-closed node-root identity service with stable non-secr
 
 ## Remaining
 
-- Nothing for LS-013.
+- Nothing for LS-023.
 
 ## Assumptions
 
-- The root SPKI, rather than a particular self-signed certificate encoding, is the stable node identity.
-- The service has one serialized startup initializer; cross-process concurrent creation is outside LS-013 and must fail closed at integration time.
-- Headless deployments must inject a separately reviewed protected store and receive no plaintext fallback.
+- The loopback foundation allows `https://localhost:<port>` and `https://127.0.0.1:<port>` as configured origins.
+- TLS connection capacity is 64 and handshake timeout is 5 seconds.
+- Requests without Fetch Metadata remain possible for native clients but still require exact Origin on pairing POSTs.
 
 ## Next Exact Step
 
-Start LS-014 by integrating one serialized node-identity initializer into desktop startup and exposing only `NodeIdentitySummary` through a trusted-local Tauri command/UI, without adding TLS serving or LAN binding.
+Plan LS-024 same-origin static browser UI hosting without changing the active desktop listener or enabling LAN binding.

@@ -41,6 +41,51 @@ fn server_info(
 }
 
 #[tauri::command]
+fn node_identity(
+    identity: tauri::State<'_, localstream_core::node_identity::NodeIdentitySummary>,
+) -> localstream_core::node_identity::NodeIdentitySummary {
+    identity.inner().clone()
+}
+
+#[tauri::command]
+fn reset_node_identity(
+    core: tauri::State<'_, Arc<LocalStreamCore>>,
+    store: tauri::State<'_, localstream_core::node_identity::KeyringNodeSecretStore>,
+) -> Result<usize, String> {
+    core.reset_node_identity(store.inner())
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn export_node_root_certificate(
+    app: tauri::AppHandle,
+    expected: tauri::State<'_, localstream_core::node_identity::NodeIdentitySummary>,
+    store: tauri::State<'_, localstream_core::node_identity::KeyringNodeSecretStore>,
+) -> Result<bool, String> {
+    let identity = localstream_core::node_identity::NodeIdentityService::new(store.inner())
+        .load_existing()
+        .map_err(|error| error.to_string())?;
+    if identity.summary() != expected.inner() {
+        return Err("the protected node identity changed unexpectedly".to_owned());
+    }
+    let Some(destination) = app
+        .dialog()
+        .file()
+        .add_filter("X.509 certificate", &["cer", "der"])
+        .set_file_name(format!("localstream-{}.cer", expected.node_id))
+        .blocking_save_file()
+    else {
+        return Ok(false);
+    };
+    let destination = destination
+        .into_path()
+        .map_err(|_| "the certificate destination is not a local filesystem path".to_owned())?;
+    std::fs::write(destination, identity.root_certificate_der())
+        .map_err(|_| "the root certificate could not be exported".to_owned())?;
+    Ok(true)
+}
+
+#[tauri::command]
 fn pending_pairings(
     core: tauri::State<'_, Arc<LocalStreamCore>>,
 ) -> Result<Vec<localstream_core::auth::PendingPairing>, String> {
@@ -93,10 +138,22 @@ pub fn run() {
                 LocalStreamCore::open(app_data.join("localstream.sqlite3"))
                     .map_err(std::io::Error::other)?,
             );
+            let identity_store =
+                localstream_core::node_identity::KeyringNodeSecretStore::new("desktop-default")
+                    .map_err(std::io::Error::other)?;
+            let identity_service =
+                localstream_core::node_identity::NodeIdentityService::new(identity_store);
+            let identity = identity_service
+                .load_or_create()
+                .map_err(std::io::Error::other)?;
+            let identity_summary = identity.summary().clone();
+            let identity_store = identity_service.into_store();
             let server = tauri::async_runtime::block_on(
                 localstream_core::server::start_local_server(Arc::clone(&core)),
             )?;
             app.manage(core);
+            app.manage(identity_summary);
+            app.manage(identity_store);
             app.manage(server);
             Ok(())
         })
@@ -104,8 +161,11 @@ pub fn run() {
             app_info,
             approve_pairing,
             current_library,
+            export_node_root_certificate,
+            node_identity,
             pending_pairings,
             reject_pairing,
+            reset_node_identity,
             revoke_trusted_peer,
             server_info,
             select_and_scan_library,

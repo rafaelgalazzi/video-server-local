@@ -10,7 +10,8 @@ Persist approved libraries and internal media-location records in embedded SQLit
 - Atomic library snapshot replacement after a scan.
 - Current-library restoration across core/application restarts.
 - Internal absolute paths retained for trusted, containment-checked playback resolution.
-- Schema-v2 trusted peer metadata, SHA-256 credential digests, capabilities, and persistent revocation.
+- Schema-v3 trusted peer metadata plus digest-only browser sessions bound to peer capability, expiry, and revocation.
+- Bulk peer revocation used before destructive node-identity reset.
 - Active-peer listing that excludes token digests and revoked records from public core models.
 - Bundled SQLite library; no external database process is required.
 
@@ -28,7 +29,7 @@ Rusqlite with bundled SQLite.
 
 ## Current Limitations
 
-The schema stores one current library selection and full-snapshot rescans. Incremental updates, backup/recovery UI, and migration tooling beyond schema version 2 are not implemented.
+The schema stores one current library selection and full-snapshot rescans. Incremental updates and backup/recovery UI are not implemented.
 
 ## Planned Work
 

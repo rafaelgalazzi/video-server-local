@@ -9,6 +9,7 @@ Own reusable Vue-native state and coordinate typed backend adapters without intr
 - `useAppInfo`: loads application metadata through an injectable adapter and exposes derived runtime state.
 - `useMediaLibrary`: restores persisted library state and coordinates approved-folder selection and safe scan results.
 - `useServerStatus`: loads the embedded HTTP server's safe address and exposure state.
+- `useNodeIdentity`: loads the trusted-local public identity and coordinates root export and confirmation-based reset.
 - `usePlayback`: owns selected media, opaque-ID stream URL construction, and playback state.
 - `usePairingRequests`: polls trusted-local pending requests and coordinates approve/reject decisions.
 - `useTrustedPeers`: loads safe peer summaries and owns confirmation-based revocation state.
@@ -21,6 +22,7 @@ Own reusable Vue-native state and coordinate typed backend adapters without intr
 - `useMediaLibrary.test.ts`: success, cancellation, and failure tests.
 - `useServerStatus.ts`: server status state and typed response contract.
 - `useServerStatus.test.ts`: loopback success and failure tests.
+- `useNodeIdentity.ts` and its test: safe node-summary loading and failure containment.
 - `usePlayback.ts`: Direct Play selection, URL, and event state.
 - `usePlayback.test.ts`: URL safety, API availability, playback-event, and reset tests.
 - `usePairingRequests.ts`: pending request state, decision orchestration, and polling lifecycle.

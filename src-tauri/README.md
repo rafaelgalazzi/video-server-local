@@ -6,7 +6,7 @@ Provide the Tauri 2 desktop shell, lifecycle, permissions, configuration, and th
 
 ## Features
 
-The shell creates the main window, initializes the database-backed core, starts the embedded loopback HTTP server, exposes safe status/library commands, and provides an approved-folder picker that delegates scanning/persistence to the core.
+The shell creates the main window, initializes the database-backed core and protected node identity, starts the embedded loopback HTTP server, exposes safe trusted-local commands, and provides an approved-folder picker.
 
 ## Important Files
 
@@ -18,7 +18,7 @@ The shell creates the main window, initializes the database-backed core, starts 
 
 ## Public Interfaces
 
-Tauri commands `app_info` and `server_info` return safe runtime metadata. `current_library` loads the safe persisted view. `select_and_scan_library` performs native folder selection and delegates scan/persistence to `LocalStreamCore`. Commands must remain thin adapters.
+Tauri commands `app_info`, `server_info`, and `node_identity` return safe runtime metadata. `current_library` loads the safe persisted view. Commands must remain thin adapters.
 
 ## Dependencies
 

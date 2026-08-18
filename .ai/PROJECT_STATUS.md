@@ -34,14 +34,24 @@ Milestone 2 foundation: embedded HTTP API and loopback Direct Play.
 - A dormant authenticated Axum router strictly validates bearer credentials, enforces `library.read`, inserts safe peer identity, and returns uniform unauthorized responses.
 - ADR-0007 defines persistent private-PKI node identity, native certificate pinning, explicit browser trust onboarding, and same-origin secure browser sessions.
 - A reusable node-root service generates P-256 CA material, derives stable safe identity from SPKI, persists private PKCS#8 only through a platform secret-store boundary, and fails closed on corruption or storage failure.
+- Desktop startup serially restores the protected node identity before the loopback server and exposes only its public node ID and root fingerprint through a trusted-local command and UI.
+- Explicit local identity reset revokes every active peer before protected-root deletion, fails closed on deletion errors, and requires UI confirmation and restart.
+- The node root issues fresh-key 30-day P-256 server leaves with validated DNS/IP SANs, server-only usage, and a leaf-first certificate chain.
+- Leaf material converts directly into a TLS 1.3/1.2 Rustls server configuration with HTTP/1.1 ALPN, no client certificate request, and negative trust/name handshake coverage.
+- A separate authenticated HTTPS lifecycle binds only ephemeral loopback, rejects plaintext/wrong trust, serves protected routes, and shuts down gracefully; desktop startup remains unchanged.
+- Trusted-local root export writes public DER only to a user-selected file after existing-only identity reload and startup-summary verification, with explicit fingerprint/trust guidance and no automatic installation.
+- Pairing begin/claim attempts have separate per-source/global monotonic rate policies, normalized actual-socket IPs, bounded stale-cleaned memory, safe retry decisions, and fail-closed state.
+- HTTPS-only native pairing routes enforce actual-socket rate limits and strict body bounds, require local approval, issue one bearer credential, reject replay uniformly, and remain absent from trusted-local HTTP.
+- Approved browser claims set a 24-hour `__Host-` secure HttpOnly strict-same-site cookie with no response secret; digest-only sessions survive restart and fail uniformly on expiry, malformed cookies, capability errors, or peer/identity revocation.
+- The loopback HTTPS surface strictly validates one configured Host, requires exact same-origin Origin and safe Fetch Metadata on pairing POSTs before rate limiting, ignores forwarded authority metadata, caps TLS connections at 64, and times out stalled handshakes after five seconds.
 
 ## In Progress
 
-- Nothing. LS-013 is complete; node identity is not connected to application startup.
+- Nothing.
 
 ## Not Started
 
-- Encrypted pairing/session routes, client secure storage, rate limiting, and safe LAN binding.
+- Client secure storage and safe LAN binding.
 - Web UI hosting for remote browser clients.
 - Node discovery, pairing, trust, and distributed libraries.
 - FFmpeg probing/transcoding and concurrency management.
@@ -56,14 +66,13 @@ Milestone 2 foundation: embedded HTTP API and loopback Direct Play.
 - HTTP and Direct Play are loopback-only on an ephemeral port until pairing/authentication is implemented.
 - Direct Play supports one byte range per request; multipart ranges and conditional caching are not implemented.
 - Playback compatibility is delegated to the embedded browser; ffprobe metadata and transcoding fallback are not implemented.
-- Peer credential mechanics are core-only; there are no pairing endpoints, approval UI, client secret storage, or authenticated LAN routes.
-- Pairing requests are intentionally memory-only and disappear on restart; network rate limiting is not implemented because no remote pairing route exists.
-- The approval UI has no real incoming requests until a later encrypted remote pairing transport exists.
-- The authenticated router is not attached to a listener; DD-007's resolved browser media credential design is not implemented.
-- Most ADR-0007 runtime work remains: node identity is not integrated, and TLS, browser trust installation, secure sessions, CSRF/origin checks, and encrypted pairing are unimplemented.
-- The node-root service has no startup integration, identity-reset workflow, leaf issuance, TLS use, or tested real OS keyring operation.
-- The repository has no commits; all current files are untracked at the time of this inspection.
+- Pairing requests are intentionally memory-only and disappear on restart.
+- Native client secret storage is not implemented.
+- The authenticated HTTPS router is loopback-only and dormant from desktop startup; LAN exposure remains prohibited.
+- Same-origin static browser UI hosting and unsafe authenticated browser methods/CSRF tokens are not implemented.
+- The verified HTTPS lifecycle is not connected to desktop startup or LAN; interactive certificate export/install and real OS keyring operation remain untested.
+- LS-014 through LS-023 changes remain uncommitted in the working tree.
 
 ## Next Major Goal
 
-Implement LS-014 serialized startup integration and trusted-local node identity display without adding TLS or LAN binding.
+Plan LS-024 same-origin static browser UI hosting while preserving loopback-only startup and every remaining LAN gate.

@@ -1,14 +1,16 @@
-use std::{net::SocketAddr, sync::Arc};
+use std::{net::SocketAddr, sync::Arc, time::Duration};
 
+use axum::extract::rejection::JsonRejection;
 use axum::{
     body::Body,
-    extract::{Path, Request, State},
+    extract::{DefaultBodyLimit, Extension, Path, Request, State},
     http::{header, HeaderMap, HeaderValue, StatusCode},
     middleware::{self, Next},
     response::{IntoResponse, Response},
-    routing::get,
+    routing::{get, post},
     Json, Router,
 };
+use serde::Deserialize;
 use serde::Serialize;
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
 use tokio::{net::TcpListener, sync::oneshot, task::JoinHandle};
@@ -19,6 +21,48 @@ use crate::{
     streaming::{range::parse_single_range, StreamingError},
     LibraryScan, LocalStreamCore,
 };
+
+use crate::node_identity::{LeafIssuanceError, NodeIdentity, TlsConfigError};
+
+const MAX_HTTPS_CONNECTIONS: usize = 64;
+const TLS_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
+
+#[derive(Debug, Clone)]
+pub struct HttpsRequestPolicy {
+    allowed_hosts: Arc<[String]>,
+    allowed_origins: Arc<[String]>,
+}
+
+impl HttpsRequestPolicy {
+    fn for_loopback(address: SocketAddr) -> Self {
+        let port = address.port();
+        Self {
+            allowed_hosts: Arc::from([
+                format!("localhost:{port}"),
+                format!("{}:{port}", address.ip()),
+            ]),
+            allowed_origins: Arc::from([
+                format!("https://localhost:{port}"),
+                format!("https://{}:{port}", address.ip()),
+            ]),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct HttpsLimits {
+    max_connections: usize,
+    handshake_timeout: Duration,
+}
+
+impl Default for HttpsLimits {
+    fn default() -> Self {
+        Self {
+            max_connections: MAX_HTTPS_CONNECTIONS,
+            handshake_timeout: TLS_HANDSHAKE_TIMEOUT,
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -51,6 +95,62 @@ impl Drop for ServerHandle {
     }
 }
 
+#[derive(Debug)]
+pub struct HttpsServerHandle {
+    info: ServerInfo,
+    shutdown: Option<tokio::sync::watch::Sender<bool>>,
+    task: Option<JoinHandle<()>>,
+}
+
+impl HttpsServerHandle {
+    #[must_use]
+    pub fn info(&self) -> ServerInfo {
+        self.info.clone()
+    }
+
+    pub async fn shutdown(mut self) {
+        if let Some(shutdown) = self.shutdown.take() {
+            let _ = shutdown.send(true);
+        }
+        if let Some(task) = self.task.take() {
+            let _ = task.await;
+        }
+    }
+}
+
+impl Drop for HttpsServerHandle {
+    fn drop(&mut self) {
+        if let Some(shutdown) = self.shutdown.take() {
+            let _ = shutdown.send(true);
+        }
+        if let Some(task) = self.task.take() {
+            task.abort();
+        }
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum HttpsServerError {
+    #[error("the HTTPS listener is unavailable")]
+    ListenerUnavailable,
+    #[error("the HTTPS node certificate is unavailable")]
+    IdentityUnavailable,
+    #[error("the HTTPS TLS configuration is unavailable")]
+    TlsUnavailable,
+}
+
+impl From<LeafIssuanceError> for HttpsServerError {
+    fn from(_: LeafIssuanceError) -> Self {
+        Self::IdentityUnavailable
+    }
+}
+
+impl From<TlsConfigError> for HttpsServerError {
+    fn from(_: TlsConfigError) -> Self {
+        Self::TlsUnavailable
+    }
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct HealthResponse {
@@ -77,6 +177,7 @@ struct ApiError {
     code: &'static str,
     message: &'static str,
     content_range: Option<String>,
+    retry_after_seconds: Option<u64>,
 }
 
 impl ApiError {
@@ -86,6 +187,7 @@ impl ApiError {
             code: "internal_error",
             message: "The request could not be completed.",
             content_range: None,
+            retry_after_seconds: None,
         }
     }
 
@@ -95,6 +197,7 @@ impl ApiError {
             code: "media_not_found",
             message: "The requested media is unavailable.",
             content_range: None,
+            retry_after_seconds: None,
         }
     }
 
@@ -104,6 +207,57 @@ impl ApiError {
             code: "range_not_satisfiable",
             message: "The requested byte range is not satisfiable.",
             content_range: Some(format!("bytes */{size}")),
+            retry_after_seconds: None,
+        }
+    }
+
+    fn invalid_pairing_request() -> Self {
+        Self {
+            status: StatusCode::BAD_REQUEST,
+            code: "invalid_pairing_request",
+            message: "The pairing request is invalid.",
+            content_range: None,
+            retry_after_seconds: None,
+        }
+    }
+
+    fn pairing_claim_failed() -> Self {
+        Self {
+            status: StatusCode::BAD_REQUEST,
+            code: "pairing_claim_failed",
+            message: "The pairing claim could not be completed.",
+            content_range: None,
+            retry_after_seconds: None,
+        }
+    }
+
+    fn rate_limited(retry_after_seconds: u64) -> Self {
+        Self {
+            status: StatusCode::TOO_MANY_REQUESTS,
+            code: "rate_limited",
+            message: "Too many pairing attempts. Try again later.",
+            content_range: None,
+            retry_after_seconds: Some(retry_after_seconds),
+        }
+    }
+
+    fn payload_too_large() -> Self {
+        Self {
+            status: StatusCode::PAYLOAD_TOO_LARGE,
+            code: "payload_too_large",
+            message: "The request body is too large.",
+            content_range: None,
+            retry_after_seconds: None,
+        }
+    }
+
+    fn forbidden_request() -> Self {
+        Self {
+            status: StatusCode::FORBIDDEN,
+            code: "forbidden_request",
+            message: "The request origin is not allowed.",
+            content_range: None,
+            retry_after_seconds: None,
         }
     }
 }
@@ -124,6 +278,11 @@ impl IntoResponse for ApiError {
         if let Some(value) = content_range {
             if let Ok(value) = HeaderValue::from_str(&value) {
                 response.headers_mut().insert(header::CONTENT_RANGE, value);
+            }
+        }
+        if let Some(seconds) = self.retry_after_seconds {
+            if let Ok(value) = HeaderValue::from_str(&seconds.to_string()) {
+                response.headers_mut().insert(header::RETRY_AFTER, value);
             }
         }
         response
@@ -153,6 +312,269 @@ pub fn authenticated_router(core: Arc<LocalStreamCore>) -> Router {
         .with_state(core)
 }
 
+pub fn encrypted_router(core: Arc<LocalStreamCore>, policy: Arc<HttpsRequestPolicy>) -> Router {
+    let begin = Router::new()
+        .route("/api/v1/pairing/requests", post(begin_pairing))
+        .route_layer(middleware::from_fn_with_state(
+            Arc::clone(&core),
+            limit_pairing_begin,
+        ))
+        .route_layer(middleware::from_fn(require_pairing_origin))
+        .with_state(Arc::clone(&core));
+    let claim = Router::new()
+        .route("/api/v1/pairing/claims", post(claim_pairing))
+        .route_layer(middleware::from_fn_with_state(
+            Arc::clone(&core),
+            limit_pairing_claim,
+        ))
+        .route_layer(middleware::from_fn(require_pairing_origin))
+        .with_state(Arc::clone(&core));
+    let browser_claim = Router::new()
+        .route(
+            "/api/v1/pairing/browser-claims",
+            post(claim_browser_pairing),
+        )
+        .route_layer(middleware::from_fn_with_state(
+            Arc::clone(&core),
+            limit_pairing_claim,
+        ))
+        .route_layer(middleware::from_fn(require_pairing_origin))
+        .with_state(Arc::clone(&core));
+    authenticated_router(Arc::clone(&core))
+        .merge(begin)
+        .merge(claim)
+        .merge(browser_claim)
+        .layer(DefaultBodyLimit::max(2 * 1024))
+        .layer(middleware::from_fn(require_https_host))
+        .layer(Extension(policy))
+}
+
+async fn require_https_host(
+    Extension(policy): Extension<Arc<HttpsRequestPolicy>>,
+    request: Request,
+    next: Next,
+) -> Response {
+    let mut hosts = request.headers().get_all(header::HOST).iter();
+    let valid = hosts
+        .next()
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_ascii_lowercase)
+        .is_some_and(|host| policy.allowed_hosts.iter().any(|allowed| allowed == &host))
+        && hosts.next().is_none();
+    if valid {
+        next.run(request).await
+    } else {
+        ApiError::forbidden_request().into_response()
+    }
+}
+
+async fn require_pairing_origin(
+    Extension(policy): Extension<Arc<HttpsRequestPolicy>>,
+    request: Request,
+    next: Next,
+) -> Response {
+    let mut origins = request.headers().get_all(header::ORIGIN).iter();
+    let origin_valid = origins
+        .next()
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|origin| {
+            policy
+                .allowed_origins
+                .iter()
+                .any(|allowed| allowed == origin)
+        })
+        && origins.next().is_none();
+    let mut fetch_sites = request
+        .headers()
+        .get_all(header::HeaderName::from_static("sec-fetch-site"))
+        .iter();
+    let fetch_valid = match fetch_sites.next() {
+        Some(value) => {
+            value
+                .to_str()
+                .ok()
+                .is_some_and(|value| matches!(value, "same-origin" | "none"))
+                && fetch_sites.next().is_none()
+        }
+        None => true,
+    };
+    if origin_valid && fetch_valid {
+        next.run(request).await
+    } else {
+        ApiError::forbidden_request().into_response()
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct BeginPairingBody {
+    display_name: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BeginPairingResponse {
+    request_id: String,
+    verification_code: String,
+    claim_secret: String,
+    expires_in_seconds: u64,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ClaimPairingBody {
+    request_id: String,
+    claim_secret: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ClaimPairingResponse {
+    peer: crate::auth::TrustedPeer,
+    bearer_token: String,
+}
+
+async fn limit_pairing_begin(
+    State(core): State<Arc<LocalStreamCore>>,
+    Extension(remote): Extension<SocketAddr>,
+    request: Request,
+    next: Next,
+) -> Response {
+    limit_pairing_attempt(
+        core,
+        remote,
+        crate::auth::PairingAttemptKind::Begin,
+        request,
+        next,
+    )
+    .await
+}
+
+async fn limit_pairing_claim(
+    State(core): State<Arc<LocalStreamCore>>,
+    Extension(remote): Extension<SocketAddr>,
+    request: Request,
+    next: Next,
+) -> Response {
+    limit_pairing_attempt(
+        core,
+        remote,
+        crate::auth::PairingAttemptKind::Claim,
+        request,
+        next,
+    )
+    .await
+}
+
+async fn limit_pairing_attempt(
+    core: Arc<LocalStreamCore>,
+    remote: SocketAddr,
+    kind: crate::auth::PairingAttemptKind,
+    request: Request,
+    next: Next,
+) -> Response {
+    match core.check_pairing_attempt(kind, remote) {
+        crate::auth::RateLimitDecision::Allowed => next.run(request).await,
+        crate::auth::RateLimitDecision::Limited {
+            retry_after_seconds,
+        } => ApiError::rate_limited(retry_after_seconds).into_response(),
+    }
+}
+
+async fn begin_pairing(
+    State(core): State<Arc<LocalStreamCore>>,
+    body: Result<Json<BeginPairingBody>, JsonRejection>,
+) -> Result<Json<BeginPairingResponse>, ApiError> {
+    let Json(body) = body.map_err(|rejection| {
+        if rejection.status() == StatusCode::PAYLOAD_TOO_LARGE {
+            ApiError::payload_too_large()
+        } else {
+            ApiError::invalid_pairing_request()
+        }
+    })?;
+    let receipt = core
+        .begin_pairing(&body.display_name)
+        .map_err(|error| match error {
+            crate::auth::PairingError::Auth(crate::auth::AuthError::InvalidDisplayName) => {
+                ApiError::invalid_pairing_request()
+            }
+            crate::auth::PairingError::CapacityReached => ApiError {
+                status: StatusCode::SERVICE_UNAVAILABLE,
+                code: "pairing_unavailable",
+                message: "Pairing is temporarily unavailable.",
+                content_range: None,
+                retry_after_seconds: None,
+            },
+            _ => ApiError::internal(),
+        })?;
+    Ok(Json(BeginPairingResponse {
+        request_id: receipt.request_id,
+        verification_code: receipt.verification_code,
+        claim_secret: receipt.claim_secret,
+        expires_in_seconds: receipt.expires_in_seconds,
+    }))
+}
+
+async fn claim_pairing(
+    State(core): State<Arc<LocalStreamCore>>,
+    body: Result<Json<ClaimPairingBody>, JsonRejection>,
+) -> Result<Json<ClaimPairingResponse>, ApiError> {
+    let Json(body) = body.map_err(|rejection| {
+        if rejection.status() == StatusCode::PAYLOAD_TOO_LARGE {
+            ApiError::payload_too_large()
+        } else {
+            ApiError::pairing_claim_failed()
+        }
+    })?;
+    let credential = core
+        .claim_pairing(&body.request_id, &body.claim_secret)
+        .map_err(|error| match error {
+            crate::auth::PairingError::Auth(
+                crate::auth::AuthError::RandomnessUnavailable | crate::auth::AuthError::Unavailable,
+            )
+            | crate::auth::PairingError::Unavailable => ApiError::internal(),
+            _ => ApiError::pairing_claim_failed(),
+        })?;
+    Ok(Json(ClaimPairingResponse {
+        peer: credential.peer,
+        bearer_token: credential.bearer_token,
+    }))
+}
+
+async fn claim_browser_pairing(
+    State(core): State<Arc<LocalStreamCore>>,
+    body: Result<Json<ClaimPairingBody>, JsonRejection>,
+) -> Result<Response, ApiError> {
+    let Json(body) = body.map_err(|rejection| {
+        if rejection.status() == StatusCode::PAYLOAD_TOO_LARGE {
+            ApiError::payload_too_large()
+        } else {
+            ApiError::pairing_claim_failed()
+        }
+    })?;
+    let session = core
+        .claim_browser_pairing(&body.request_id, &body.claim_secret)
+        .map_err(|error| match error {
+            crate::auth::PairingError::Auth(
+                crate::auth::AuthError::RandomnessUnavailable | crate::auth::AuthError::Unavailable,
+            )
+            | crate::auth::PairingError::Unavailable => ApiError::internal(),
+            _ => ApiError::pairing_claim_failed(),
+        })?;
+    let cookie = format!(
+        "{}={}; Path=/; Max-Age={}; HttpOnly; Secure; SameSite=Strict",
+        crate::auth::SESSION_COOKIE_NAME,
+        session.session_token,
+        session.expires_in_seconds,
+    );
+    let mut response = StatusCode::NO_CONTENT.into_response();
+    response.headers_mut().insert(
+        header::SET_COOKIE,
+        HeaderValue::from_str(&cookie).map_err(|_| ApiError::internal())?,
+    );
+    Ok(response)
+}
+
 pub async fn start_local_server(core: Arc<LocalStreamCore>) -> std::io::Result<ServerHandle> {
     let listener = TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0)).await?;
     let address = listener.local_addr()?;
@@ -169,6 +591,94 @@ pub async fn start_local_server(core: Arc<LocalStreamCore>) -> std::io::Result<S
         info: server_info(address),
         shutdown: Some(shutdown),
         task,
+    })
+}
+
+pub async fn start_loopback_https_server(
+    core: Arc<LocalStreamCore>,
+    identity: &NodeIdentity,
+) -> Result<HttpsServerHandle, HttpsServerError> {
+    start_loopback_https_server_with_limits(core, identity, HttpsLimits::default()).await
+}
+
+async fn start_loopback_https_server_with_limits(
+    core: Arc<LocalStreamCore>,
+    identity: &NodeIdentity,
+    limits: HttpsLimits,
+) -> Result<HttpsServerHandle, HttpsServerError> {
+    if limits.max_connections == 0 || limits.handshake_timeout.is_zero() {
+        return Err(HttpsServerError::ListenerUnavailable);
+    }
+    let listener = TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0))
+        .await
+        .map_err(|_| HttpsServerError::ListenerUnavailable)?;
+    let address = listener
+        .local_addr()
+        .map_err(|_| HttpsServerError::ListenerUnavailable)?;
+    let leaf = identity.issue_server_leaf(&[
+        "localhost".to_owned(),
+        std::net::Ipv4Addr::LOCALHOST.to_string(),
+        std::net::Ipv6Addr::LOCALHOST.to_string(),
+    ])?;
+    let tls_config = Arc::new(leaf.into_server_config()?);
+    let tls_acceptor = tokio_rustls::TlsAcceptor::from(tls_config);
+    let request_policy = Arc::new(HttpsRequestPolicy::for_loopback(address));
+    let connection_permits = Arc::new(tokio::sync::Semaphore::new(limits.max_connections));
+    let (shutdown, mut shutdown_receiver) = tokio::sync::watch::channel(false);
+    let task = tokio::spawn(async move {
+        let graceful = hyper_util::server::graceful::GracefulShutdown::new();
+        loop {
+            tokio::select! {
+                accepted = listener.accept() => {
+                    let Ok((socket, peer)) = accepted else { break };
+                    let Ok(permit) = Arc::clone(&connection_permits).try_acquire_owned() else {
+                        drop(socket);
+                        continue;
+                    };
+                    let acceptor = tls_acceptor.clone();
+                    let service = hyper_util::service::TowerToHyperService::new(
+                        encrypted_router(Arc::clone(&core), Arc::clone(&request_policy))
+                            .layer(Extension(peer)),
+                    );
+                    let watcher = graceful.watcher();
+                    let mut connection_shutdown = shutdown_receiver.clone();
+                    tokio::spawn(async move {
+                        let _permit = permit;
+                        let tls_stream = tokio::select! {
+                            result = tokio::time::timeout(limits.handshake_timeout, acceptor.accept(socket)) => match result {
+                                Ok(Ok(stream)) => stream,
+                                Err(_) => return,
+                                Ok(Err(_)) => return,
+                            },
+                            changed = connection_shutdown.changed() => {
+                                let _ = changed;
+                                return;
+                            }
+                        };
+                        let io = hyper_util::rt::TokioIo::new(tls_stream);
+                        let connection =
+                            hyper::server::conn::http1::Builder::new().serve_connection(io, service);
+                        let _ = watcher.watch(connection).await;
+                    });
+                }
+                changed = shutdown_receiver.changed() => {
+                    if changed.is_err() || *shutdown_receiver.borrow() {
+                        break;
+                    }
+                }
+            }
+        }
+        graceful.shutdown().await;
+    });
+
+    Ok(HttpsServerHandle {
+        info: ServerInfo {
+            base_url: format!("https://{address}"),
+            bind_scope: "loopback",
+            lan_available: false,
+        },
+        shutdown: Some(shutdown),
+        task: Some(task),
     })
 }
 
@@ -195,8 +705,24 @@ async fn require_library_read(
     mut request: Request,
     next: Next,
 ) -> Response {
-    let bearer_token = strict_bearer_token(request.headers());
-    match core.authenticate_peer(bearer_token) {
+    let headers = request.headers();
+    let authorization_present = headers.contains_key(header::AUTHORIZATION);
+    let session_cookie = strict_session_cookie(headers);
+    let session_present = session_cookie.is_some()
+        || headers.get_all(header::COOKIE).iter().any(|value| {
+            value
+                .as_bytes()
+                .windows(crate::auth::SESSION_COOKIE_NAME.len())
+                .any(|window| window == crate::auth::SESSION_COOKIE_NAME.as_bytes())
+        });
+    let authenticated = if authorization_present && session_present {
+        Err(AuthError::InvalidCredential)
+    } else if authorization_present {
+        core.authenticate_peer(strict_bearer_token(headers))
+    } else {
+        core.authenticate_browser_session(session_cookie)
+    };
+    match authenticated {
         Ok(peer) if peer.capability == PeerCapability::LibraryRead => {
             request.extensions_mut().insert(peer);
             next.run(request).await
@@ -213,6 +739,23 @@ async fn require_library_read(
             | AuthError::Unavailable,
         ) => ApiError::internal().into_response(),
     }
+}
+
+fn strict_session_cookie(headers: &HeaderMap) -> Option<&str> {
+    let mut cookie_headers = headers.get_all(header::COOKIE).iter();
+    let header = cookie_headers.next()?;
+    if cookie_headers.next().is_some() {
+        return None;
+    }
+    let header = header.to_str().ok()?;
+    let mut session = None;
+    for pair in header.split(';') {
+        let (name, value) = pair.trim().split_once('=')?;
+        if name == crate::auth::SESSION_COOKIE_NAME && session.replace(value).is_some() {
+            return None;
+        }
+    }
+    session.filter(|value| !value.is_empty())
 }
 
 fn strict_bearer_token(headers: &HeaderMap) -> Option<&str> {
@@ -264,6 +807,7 @@ async fn stream_media(
                 code: "stream_capacity_reached",
                 message: "Streaming is temporarily unavailable.",
                 content_range: None,
+                retry_after_seconds: None,
             },
             StreamingError::OutsideApprovedLibrary | StreamingError::Unavailable => {
                 ApiError::internal()
@@ -319,23 +863,122 @@ async fn stream_media(
 
 #[cfg(test)]
 mod tests {
-    use std::{fs, sync::Arc};
+    use std::{fs, sync::Arc, time::Duration};
 
     use axum::{
         body::Body,
         extract::Extension,
-        http::{header, HeaderValue, Request, StatusCode},
+        http::{header, HeaderMap, HeaderValue, Request, StatusCode},
         middleware,
         routing::get,
         Json, Router,
     };
     use http_body_util::BodyExt;
     use tempfile::tempdir;
+    use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
     use tower::ServiceExt;
 
     use crate::{auth::TrustedPeer, LocalStreamCore};
 
-    use super::{authenticated_router, require_library_read, router, start_local_server};
+    use super::{
+        authenticated_router, encrypted_router, require_library_read, router, start_local_server,
+        start_loopback_https_server, start_loopback_https_server_with_limits, HttpsLimits,
+        HttpsRequestPolicy,
+    };
+
+    #[derive(Clone, Default)]
+    struct MemoryIdentityStore(Arc<std::sync::Mutex<Option<Vec<u8>>>>);
+
+    impl crate::node_identity::NodeSecretStore for MemoryIdentityStore {
+        fn load(&self) -> Result<Option<Vec<u8>>, crate::node_identity::SecretStoreError> {
+            Ok(self.0.lock().expect("identity store should lock").clone())
+        }
+
+        fn store(&self, secret: &[u8]) -> Result<(), crate::node_identity::SecretStoreError> {
+            *self.0.lock().expect("identity store should lock") = Some(secret.to_vec());
+            Ok(())
+        }
+
+        fn delete(&self) -> Result<(), crate::node_identity::SecretStoreError> {
+            *self.0.lock().expect("identity store should lock") = None;
+            Ok(())
+        }
+    }
+
+    fn test_identity() -> crate::node_identity::NodeIdentity {
+        crate::node_identity::NodeIdentityService::new(MemoryIdentityStore::default())
+            .load_or_create()
+            .expect("test identity should generate")
+    }
+
+    fn tls_client_config(root_der: &[u8]) -> rustls::ClientConfig {
+        let mut roots = rustls::RootCertStore::empty();
+        roots
+            .add(rustls::pki_types::CertificateDer::from(root_der.to_vec()))
+            .expect("test root should add");
+        let provider = Arc::new(rustls::crypto::ring::default_provider());
+        let mut config = rustls::ClientConfig::builder_with_provider(provider)
+            .with_protocol_versions(&[&rustls::version::TLS13, &rustls::version::TLS12])
+            .expect("test protocols should configure")
+            .with_root_certificates(roots)
+            .with_no_client_auth();
+        config.alpn_protocols = vec![b"http/1.1".to_vec()];
+        config
+    }
+
+    async fn https_request(
+        address: std::net::SocketAddr,
+        root_der: &[u8],
+        server_name: &str,
+        path: &str,
+        bearer: Option<&str>,
+    ) -> Result<(StatusCode, Vec<u8>), Box<dyn std::error::Error + Send + Sync>> {
+        let (status, _, body) = https_exchange(
+            address,
+            root_der,
+            server_name,
+            hyper::Method::GET,
+            path,
+            Vec::new(),
+            bearer
+                .map(|token| vec![(header::AUTHORIZATION, format!("Bearer {token}"))])
+                .unwrap_or_default(),
+        )
+        .await?;
+        Ok((status, body))
+    }
+
+    async fn https_exchange(
+        address: std::net::SocketAddr,
+        root_der: &[u8],
+        server_name: &str,
+        method: hyper::Method,
+        path: &str,
+        body: Vec<u8>,
+        headers: Vec<(header::HeaderName, String)>,
+    ) -> Result<(StatusCode, HeaderMap, Vec<u8>), Box<dyn std::error::Error + Send + Sync>> {
+        let tcp = tokio::net::TcpStream::connect(address).await?;
+        let connector = tokio_rustls::TlsConnector::from(Arc::new(tls_client_config(root_der)));
+        let name = rustls::pki_types::ServerName::try_from(server_name.to_owned())?;
+        let tls = connector.connect(name, tcp).await?;
+        let io = hyper_util::rt::TokioIo::new(tls);
+        let (mut sender, connection) = hyper::client::conn::http1::handshake(io).await?;
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        let mut request = Request::builder()
+            .method(method)
+            .uri(path)
+            .header(header::HOST, format!("localhost:{}", address.port()));
+        for (name, value) in headers {
+            request = request.header(name, value);
+        }
+        let response = sender.send_request(request.body(Body::from(body))?).await?;
+        let status = response.status();
+        let headers = response.headers().clone();
+        let body = response.into_body().collect().await?.to_bytes().to_vec();
+        Ok((status, headers, body))
+    }
 
     fn persisted_media() -> (tempfile::TempDir, Arc<LocalStreamCore>, String) {
         let directory = tempdir().expect("temporary library should be created");
@@ -415,6 +1058,733 @@ mod tests {
         assert!(info.base_url.starts_with("http://127.0.0.1:"));
         assert_eq!(info.bind_scope, "loopback");
         assert!(!info.lan_available);
+    }
+
+    #[tokio::test]
+    async fn https_lifecycle_serves_health_and_authenticated_library_on_loopback() {
+        let directory = tempdir().expect("temporary library should be created");
+        fs::write(directory.path().join("Secure Movie.mp4"), b"video")
+            .expect("video should be created");
+        let core = Arc::new(LocalStreamCore::in_memory().expect("core should open"));
+        core.scan_and_persist_library(directory.path())
+            .expect("library should persist");
+        let issued = core
+            .issue_peer_credential("TLS Test Client")
+            .expect("credential should issue");
+        let identity = test_identity();
+        let server = start_loopback_https_server(core, &identity)
+            .await
+            .expect("HTTPS server should start");
+        let info = server.info();
+        let address: std::net::SocketAddr = info
+            .base_url
+            .strip_prefix("https://")
+            .expect("HTTPS scheme should exist")
+            .parse()
+            .expect("address should parse");
+
+        assert!(address.ip().is_loopback());
+        assert_eq!(info.bind_scope, "loopback");
+        assert!(!info.lan_available);
+        let (health_status, health_body) = https_request(
+            address,
+            identity.root_certificate_der(),
+            "localhost",
+            "/api/v1/health",
+            None,
+        )
+        .await
+        .expect("trusted health request should succeed");
+        assert_eq!(health_status, StatusCode::OK);
+        assert!(String::from_utf8_lossy(&health_body).contains("LocalStream"));
+
+        let (unauthorized, _) = https_request(
+            address,
+            identity.root_certificate_der(),
+            "localhost",
+            "/api/v1/library",
+            None,
+        )
+        .await
+        .expect("unauthorized HTTPS request should complete");
+        assert_eq!(unauthorized, StatusCode::UNAUTHORIZED);
+        let (library_status, library_body) = https_request(
+            address,
+            identity.root_certificate_der(),
+            "localhost",
+            "/api/v1/library",
+            Some(&issued.bearer_token),
+        )
+        .await
+        .expect("authenticated HTTPS request should succeed");
+        assert_eq!(library_status, StatusCode::OK);
+        assert!(String::from_utf8_lossy(&library_body).contains("Secure Movie"));
+
+        server.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn https_lifecycle_rejects_wrong_root_wrong_name_and_plaintext_downgrade() {
+        let core = Arc::new(LocalStreamCore::in_memory().expect("core should open"));
+        let identity = test_identity();
+        let wrong_identity = test_identity();
+        let server = start_loopback_https_server(core, &identity)
+            .await
+            .expect("HTTPS server should start");
+        let address: std::net::SocketAddr = server
+            .info()
+            .base_url
+            .strip_prefix("https://")
+            .expect("HTTPS scheme should exist")
+            .parse()
+            .expect("address should parse");
+
+        assert!(https_request(
+            address,
+            wrong_identity.root_certificate_der(),
+            "localhost",
+            "/api/v1/health",
+            None,
+        )
+        .await
+        .is_err());
+        assert!(https_request(
+            address,
+            identity.root_certificate_der(),
+            "wrong.local",
+            "/api/v1/health",
+            None,
+        )
+        .await
+        .is_err());
+
+        let mut plaintext = tokio::net::TcpStream::connect(address)
+            .await
+            .expect("plaintext socket should connect");
+        plaintext
+            .write_all(b"GET /api/v1/health HTTP/1.1\r\nHost: localhost\r\n\r\n")
+            .await
+            .expect("plaintext bytes should write");
+        let mut response = Vec::new();
+        let _ = tokio::time::timeout(Duration::from_secs(2), plaintext.read_to_end(&mut response))
+            .await;
+        assert!(!response.windows(5).any(|window| window == b"HTTP/"));
+
+        server.shutdown().await;
+        let rebound = tokio::net::TcpListener::bind(address)
+            .await
+            .expect("graceful shutdown should release listener");
+        drop(rebound);
+    }
+
+    #[tokio::test]
+    async fn encrypted_pairing_route_requires_local_approval_and_claims_once() {
+        let core = Arc::new(LocalStreamCore::in_memory().expect("core should open"));
+        let identity = test_identity();
+        let server = start_loopback_https_server(Arc::clone(&core), &identity)
+            .await
+            .expect("HTTPS server should start");
+        let address: std::net::SocketAddr = server
+            .info()
+            .base_url
+            .strip_prefix("https://")
+            .expect("HTTPS scheme should exist")
+            .parse()
+            .expect("address should parse");
+        let json_headers = vec![
+            (header::CONTENT_TYPE, "application/json".to_owned()),
+            (
+                header::ORIGIN,
+                format!("https://localhost:{}", address.port()),
+            ),
+        ];
+        let (status, _, body) = https_exchange(
+            address,
+            identity.root_certificate_der(),
+            "localhost",
+            hyper::Method::POST,
+            "/api/v1/pairing/requests",
+            br#"{"displayName":"Living Room Client"}"#.to_vec(),
+            json_headers.clone(),
+        )
+        .await
+        .expect("pairing request should complete");
+        assert_eq!(status, StatusCode::OK);
+        let receipt: serde_json::Value =
+            serde_json::from_slice(&body).expect("receipt should be JSON");
+        let request_id = receipt["requestId"]
+            .as_str()
+            .expect("request ID should exist");
+        let claim_secret = receipt["claimSecret"]
+            .as_str()
+            .expect("claim secret should exist");
+        let verification_code = receipt["verificationCode"]
+            .as_str()
+            .expect("verification code should exist");
+        assert_eq!(receipt["expiresInSeconds"], 120);
+        let pending = core
+            .pending_pairings()
+            .expect("pending requests should load");
+        assert_eq!(pending.len(), 1);
+        assert_eq!(pending[0].display_name, "Living Room Client");
+
+        let claim_body = serde_json::json!({
+            "requestId": request_id,
+            "claimSecret": claim_secret,
+        })
+        .to_string()
+        .into_bytes();
+        let (before_status, _, before_body) = https_exchange(
+            address,
+            identity.root_certificate_der(),
+            "localhost",
+            hyper::Method::POST,
+            "/api/v1/pairing/claims",
+            claim_body.clone(),
+            json_headers.clone(),
+        )
+        .await
+        .expect("pre-approval claim should complete");
+        assert_eq!(before_status, StatusCode::BAD_REQUEST);
+        assert!(String::from_utf8_lossy(&before_body).contains("pairing_claim_failed"));
+
+        for invalid_body in [
+            serde_json::json!({
+                "requestId": "ls_pair_unknown",
+                "claimSecret": claim_secret,
+            })
+            .to_string()
+            .into_bytes(),
+            serde_json::json!({
+                "requestId": request_id,
+                "claimSecret": "ls_claim_invalid",
+            })
+            .to_string()
+            .into_bytes(),
+        ] {
+            let (failure_status, _, failure_body) = https_exchange(
+                address,
+                identity.root_certificate_der(),
+                "localhost",
+                hyper::Method::POST,
+                "/api/v1/pairing/claims",
+                invalid_body,
+                json_headers.clone(),
+            )
+            .await
+            .expect("invalid claim should complete uniformly");
+            assert_eq!(failure_status, before_status);
+            assert_eq!(failure_body, before_body);
+        }
+
+        core.approve_pairing(request_id, verification_code)
+            .expect("local approval should succeed");
+        let (claim_status, _, claim_response) = https_exchange(
+            address,
+            identity.root_certificate_der(),
+            "localhost",
+            hyper::Method::POST,
+            "/api/v1/pairing/claims",
+            claim_body.clone(),
+            json_headers.clone(),
+        )
+        .await
+        .expect("approved claim should complete");
+        assert_eq!(claim_status, StatusCode::OK);
+        let credential: serde_json::Value =
+            serde_json::from_slice(&claim_response).expect("credential should be JSON");
+        let bearer = credential["bearerToken"]
+            .as_str()
+            .expect("bearer should exist");
+        assert!(bearer.starts_with("ls_peer_"));
+        assert_eq!(credential["peer"]["displayName"], "Living Room Client");
+
+        let (library_status, _) = https_request(
+            address,
+            identity.root_certificate_der(),
+            "localhost",
+            "/api/v1/library",
+            Some(bearer),
+        )
+        .await
+        .expect("issued credential should authenticate");
+        assert_eq!(library_status, StatusCode::OK);
+
+        let (replay_status, _, replay_body) = https_exchange(
+            address,
+            identity.root_certificate_der(),
+            "localhost",
+            hyper::Method::POST,
+            "/api/v1/pairing/claims",
+            claim_body,
+            json_headers,
+        )
+        .await
+        .expect("replay should complete uniformly");
+        assert_eq!(replay_status, before_status);
+        assert_eq!(replay_body, before_body);
+        server.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn encrypted_pairing_routes_bound_json_and_ignore_forwarding_headers_for_limits() {
+        let core = Arc::new(LocalStreamCore::in_memory().expect("core should open"));
+        let identity = test_identity();
+        let server = start_loopback_https_server(core, &identity)
+            .await
+            .expect("HTTPS server should start");
+        let address: std::net::SocketAddr = server
+            .info()
+            .base_url
+            .strip_prefix("https://")
+            .expect("HTTPS scheme should exist")
+            .parse()
+            .expect("address should parse");
+
+        for attempt in 0..6 {
+            let headers = vec![
+                (header::CONTENT_TYPE, "application/json".to_owned()),
+                (
+                    header::ORIGIN,
+                    format!("https://localhost:{}", address.port()),
+                ),
+                (
+                    header::HeaderName::from_static("x-forwarded-for"),
+                    format!("198.51.100.{}", attempt + 1),
+                ),
+            ];
+            let (status, response_headers, body) = https_exchange(
+                address,
+                identity.root_certificate_der(),
+                "localhost",
+                hyper::Method::POST,
+                "/api/v1/pairing/requests",
+                format!(r#"{{"displayName":"Client {attempt}"}}"#).into_bytes(),
+                headers,
+            )
+            .await
+            .expect("rate-limit request should complete");
+            if attempt < 5 {
+                assert_eq!(status, StatusCode::OK);
+            } else {
+                assert_eq!(status, StatusCode::TOO_MANY_REQUESTS);
+                assert!(response_headers
+                    .get(header::RETRY_AFTER)
+                    .and_then(|value| value.to_str().ok())
+                    .is_some_and(|value| value.parse::<u64>().is_ok()));
+                assert!(String::from_utf8_lossy(&body).contains("rate_limited"));
+            }
+        }
+        server.shutdown().await;
+
+        let core = Arc::new(LocalStreamCore::in_memory().expect("core should open"));
+        let identity = test_identity();
+        let server = start_loopback_https_server(core, &identity)
+            .await
+            .expect("second HTTPS server should start");
+        let address: std::net::SocketAddr = server
+            .info()
+            .base_url
+            .strip_prefix("https://")
+            .expect("HTTPS scheme should exist")
+            .parse()
+            .expect("address should parse");
+        let (unknown_status, _, unknown_body) = https_exchange(
+            address,
+            identity.root_certificate_der(),
+            "localhost",
+            hyper::Method::POST,
+            "/api/v1/pairing/requests",
+            br#"{"displayName":"Client","unexpected":true}"#.to_vec(),
+            vec![
+                (header::CONTENT_TYPE, "application/json".to_owned()),
+                (
+                    header::ORIGIN,
+                    format!("https://localhost:{}", address.port()),
+                ),
+            ],
+        )
+        .await
+        .expect("unknown-field request should complete");
+        assert_eq!(unknown_status, StatusCode::BAD_REQUEST);
+        assert!(String::from_utf8_lossy(&unknown_body).contains("invalid_pairing_request"));
+
+        let (large_status, _, _) = https_exchange(
+            address,
+            identity.root_certificate_der(),
+            "localhost",
+            hyper::Method::POST,
+            "/api/v1/pairing/requests",
+            vec![b'x'; 2_049],
+            vec![
+                (header::CONTENT_TYPE, "application/json".to_owned()),
+                (
+                    header::ORIGIN,
+                    format!("https://localhost:{}", address.port()),
+                ),
+            ],
+        )
+        .await
+        .expect("oversized request should complete");
+        assert_eq!(large_status, StatusCode::PAYLOAD_TOO_LARGE);
+        server.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn encrypted_routes_enforce_authority_origin_and_fetch_metadata_before_pairing() {
+        let core = Arc::new(LocalStreamCore::in_memory().expect("core should open"));
+        let identity = test_identity();
+        let server = start_loopback_https_server(Arc::clone(&core), &identity)
+            .await
+            .expect("HTTPS server should start");
+        let address: std::net::SocketAddr = server
+            .info()
+            .base_url
+            .strip_prefix("https://")
+            .expect("HTTPS scheme should exist")
+            .parse()
+            .expect("address should parse");
+        let origin = format!("https://localhost:{}", address.port());
+        let pairing_body = br#"{"displayName":"Origin Test"}"#.to_vec();
+
+        let missing_host = encrypted_router(
+            Arc::clone(&core),
+            Arc::new(HttpsRequestPolicy::for_loopback(address)),
+        )
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/health")
+                .body(Body::empty())
+                .expect("request should build"),
+        )
+        .await
+        .expect("missing-host request should complete");
+        assert_eq!(missing_host.status(), StatusCode::FORBIDDEN);
+
+        for host_headers in [
+            vec![(header::HOST, "example.test".to_owned())],
+            vec![(header::HOST, format!("localhost:{}", address.port()))],
+        ] {
+            let (status, _, _) = https_exchange(
+                address,
+                identity.root_certificate_der(),
+                "localhost",
+                hyper::Method::GET,
+                "/api/v1/health",
+                Vec::new(),
+                host_headers,
+            )
+            .await
+            .expect("invalid-host request should complete");
+            assert_eq!(status, StatusCode::FORBIDDEN);
+        }
+
+        let invalid_origin_headers = [
+            Vec::new(),
+            vec![(header::ORIGIN, "null".to_owned())],
+            vec![(
+                header::ORIGIN,
+                format!("http://localhost:{}", address.port()),
+            )],
+            vec![(header::ORIGIN, "https://example.test".to_owned())],
+            vec![(header::ORIGIN, "not an origin".to_owned())],
+            vec![
+                (header::ORIGIN, origin.clone()),
+                (header::ORIGIN, origin.clone()),
+            ],
+            vec![
+                (header::ORIGIN, origin.clone()),
+                (
+                    header::HeaderName::from_static("sec-fetch-site"),
+                    "cross-site".to_owned(),
+                ),
+            ],
+        ];
+        let mut rejection_body = None;
+        for mut headers in invalid_origin_headers {
+            headers.push((header::CONTENT_TYPE, "application/json".to_owned()));
+            let (status, _, body) = https_exchange(
+                address,
+                identity.root_certificate_der(),
+                "localhost",
+                hyper::Method::POST,
+                "/api/v1/pairing/requests",
+                pairing_body.clone(),
+                headers,
+            )
+            .await
+            .expect("invalid-origin request should complete");
+            assert_eq!(status, StatusCode::FORBIDDEN);
+            if let Some(expected) = &rejection_body {
+                assert_eq!(&body, expected);
+            } else {
+                rejection_body = Some(body);
+            }
+        }
+        assert!(core
+            .pending_pairings()
+            .expect("pending pairings should list")
+            .is_empty());
+
+        let (status, _, _) = https_exchange(
+            address,
+            identity.root_certificate_der(),
+            "localhost",
+            hyper::Method::POST,
+            "/api/v1/pairing/requests",
+            pairing_body,
+            vec![
+                (header::CONTENT_TYPE, "application/json".to_owned()),
+                (header::ORIGIN, origin),
+                (
+                    header::HeaderName::from_static("sec-fetch-site"),
+                    "same-origin".to_owned(),
+                ),
+                (
+                    header::HeaderName::from_static("forwarded"),
+                    "host=example.test;proto=http".to_owned(),
+                ),
+                (
+                    header::HeaderName::from_static("x-forwarded-host"),
+                    "example.test".to_owned(),
+                ),
+            ],
+        )
+        .await
+        .expect("same-origin request should complete");
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(
+            core.pending_pairings()
+                .expect("pending pairings should list")
+                .len(),
+            1
+        );
+        server.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn https_connection_limit_fails_closed_and_handshake_timeout_releases_capacity() {
+        let core = Arc::new(LocalStreamCore::in_memory().expect("core should open"));
+        let identity = test_identity();
+        let server = start_loopback_https_server_with_limits(
+            core,
+            &identity,
+            HttpsLimits {
+                max_connections: 1,
+                handshake_timeout: Duration::from_millis(100),
+            },
+        )
+        .await
+        .expect("limited HTTPS server should start");
+        let address: std::net::SocketAddr = server
+            .info()
+            .base_url
+            .strip_prefix("https://")
+            .expect("HTTPS scheme should exist")
+            .parse()
+            .expect("address should parse");
+
+        let stalled = tokio::net::TcpStream::connect(address)
+            .await
+            .expect("stalled connection should open");
+        tokio::time::sleep(Duration::from_millis(25)).await;
+        let saturated = https_request(
+            address,
+            identity.root_certificate_der(),
+            "localhost",
+            "/api/v1/health",
+            None,
+        )
+        .await;
+        assert!(saturated.is_err());
+
+        tokio::time::sleep(Duration::from_millis(125)).await;
+        let (status, _) = https_request(
+            address,
+            identity.root_certificate_der(),
+            "localhost",
+            "/api/v1/health",
+            None,
+        )
+        .await
+        .expect("capacity should recover after handshake timeout");
+        assert_eq!(status, StatusCode::OK);
+        drop(stalled);
+        server.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn browser_pairing_sets_secure_cookie_authenticates_gets_and_revokes() {
+        let core = Arc::new(LocalStreamCore::in_memory().expect("core should open"));
+        let identity = test_identity();
+        let server = start_loopback_https_server(Arc::clone(&core), &identity)
+            .await
+            .expect("HTTPS server should start");
+        let address: std::net::SocketAddr = server
+            .info()
+            .base_url
+            .strip_prefix("https://")
+            .expect("HTTPS scheme should exist")
+            .parse()
+            .expect("address should parse");
+        let json_headers = vec![
+            (header::CONTENT_TYPE, "application/json".to_owned()),
+            (
+                header::ORIGIN,
+                format!("https://localhost:{}", address.port()),
+            ),
+        ];
+        let (_, _, request_body) = https_exchange(
+            address,
+            identity.root_certificate_der(),
+            "localhost",
+            hyper::Method::POST,
+            "/api/v1/pairing/requests",
+            br#"{"displayName":"Browser Client"}"#.to_vec(),
+            json_headers.clone(),
+        )
+        .await
+        .expect("browser pairing request should complete");
+        let receipt: serde_json::Value =
+            serde_json::from_slice(&request_body).expect("receipt should parse");
+        let request_id = receipt["requestId"]
+            .as_str()
+            .expect("request ID should exist");
+        let claim_secret = receipt["claimSecret"]
+            .as_str()
+            .expect("claim secret should exist");
+        core.approve_pairing(
+            request_id,
+            receipt["verificationCode"]
+                .as_str()
+                .expect("verification code should exist"),
+        )
+        .expect("browser pairing should approve");
+        let claim_body = serde_json::json!({
+            "requestId": request_id,
+            "claimSecret": claim_secret,
+        })
+        .to_string()
+        .into_bytes();
+
+        let (claim_status, claim_headers, response_body) = https_exchange(
+            address,
+            identity.root_certificate_der(),
+            "localhost",
+            hyper::Method::POST,
+            "/api/v1/pairing/browser-claims",
+            claim_body.clone(),
+            json_headers.clone(),
+        )
+        .await
+        .expect("browser claim should complete");
+        assert_eq!(claim_status, StatusCode::NO_CONTENT);
+        assert!(response_body.is_empty());
+        let set_cookie = claim_headers[header::SET_COOKIE]
+            .to_str()
+            .expect("cookie should be text");
+        assert!(set_cookie.starts_with("__Host-localstream_session=ls_session_"));
+        assert!(set_cookie.contains("; Path=/"));
+        assert!(set_cookie.contains("; Max-Age=86400"));
+        assert!(set_cookie.contains("; HttpOnly"));
+        assert!(set_cookie.contains("; Secure"));
+        assert!(set_cookie.contains("; SameSite=Strict"));
+        assert!(!set_cookie.to_ascii_lowercase().contains("domain="));
+        let cookie_pair = set_cookie
+            .split(';')
+            .next()
+            .expect("cookie pair should exist")
+            .to_owned();
+
+        let (library_status, _, _) = https_exchange(
+            address,
+            identity.root_certificate_der(),
+            "localhost",
+            hyper::Method::GET,
+            "/api/v1/library",
+            Vec::new(),
+            vec![(header::COOKIE, cookie_pair.clone())],
+        )
+        .await
+        .expect("cookie-authenticated GET should complete");
+        assert_eq!(library_status, StatusCode::OK);
+
+        let (replay_status, _, replay_body) = https_exchange(
+            address,
+            identity.root_certificate_der(),
+            "localhost",
+            hyper::Method::POST,
+            "/api/v1/pairing/browser-claims",
+            claim_body,
+            json_headers,
+        )
+        .await
+        .expect("browser claim replay should complete");
+        assert_eq!(replay_status, StatusCode::BAD_REQUEST);
+        assert!(String::from_utf8_lossy(&replay_body).contains("pairing_claim_failed"));
+
+        let malformed = vec![(header::COOKIE, "__Host-localstream_session=bad".to_owned())];
+        let duplicate = vec![
+            (header::COOKIE, cookie_pair.clone()),
+            (header::COOKIE, cookie_pair.clone()),
+        ];
+        let mut failures = Vec::new();
+        for headers in [malformed, duplicate] {
+            let (status, _, body) = https_exchange(
+                address,
+                identity.root_certificate_der(),
+                "localhost",
+                hyper::Method::GET,
+                "/api/v1/library",
+                Vec::new(),
+                headers,
+            )
+            .await
+            .expect("invalid cookie request should complete");
+            failures.push((status, body));
+        }
+        assert_eq!(failures[0], failures[1]);
+        assert_eq!(failures[0].0, StatusCode::UNAUTHORIZED);
+
+        let peer = core
+            .trusted_peers()
+            .expect("browser peer should list")
+            .into_iter()
+            .find(|peer| peer.display_name == "Browser Client")
+            .expect("browser peer should exist");
+        core.revoke_peer(&peer.id)
+            .expect("browser peer should revoke");
+        let (revoked_status, _, revoked_body) = https_exchange(
+            address,
+            identity.root_certificate_der(),
+            "localhost",
+            hyper::Method::GET,
+            "/api/v1/library",
+            Vec::new(),
+            vec![(header::COOKIE, cookie_pair)],
+        )
+        .await
+        .expect("revoked cookie request should complete");
+        assert_eq!(revoked_status, failures[0].0);
+        assert_eq!(revoked_body, failures[0].1);
+        server.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn trusted_local_http_router_does_not_expose_pairing_routes() {
+        let core = Arc::new(LocalStreamCore::in_memory().expect("core should open"));
+        let response = router(core)
+            .oneshot(
+                Request::builder()
+                    .method(hyper::Method::POST)
+                    .uri("/api/v1/pairing/requests")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(r#"{"displayName":"Client"}"#))
+                    .expect("request should build"),
+            )
+            .await
+            .expect("local router request should complete");
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 
     #[tokio::test]

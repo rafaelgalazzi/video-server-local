@@ -13,6 +13,10 @@ Expose versioned HTTP adapters backed by the reusable Rust core while keeping se
 - Stable JSON error envelope.
 - Opaque-ID Direct Play route with full and single-range responses.
 - Separate authenticated-router policy with strict bearer parsing and `library.read` enforcement.
+- Separate loopback-only HTTPS lifecycle using node-issued Rustls configuration and graceful shutdown.
+- HTTPS-only rate-limited pairing request/claim routes backed by the existing local approval service.
+- Browser claims that set an opaque secure HttpOnly same-site session cookie and expose no secret body.
+- Immutable listener-derived Host/Origin policy, pairing Fetch Metadata checks, bounded TLS connections, and handshake timeouts.
 
 ## Important Files
 
@@ -24,15 +28,18 @@ Expose versioned HTTP adapters backed by the reusable Rust core while keeping se
 - `ServerHandle`: reports safe address information and triggers graceful shutdown on drop.
 - `router`: public for reuse by a future headless distribution and integration tests.
 - `authenticated_router`: dormant protected health/library/stream composition for future encrypted transports.
+- `start_loopback_https_server`: foundation-only authenticated HTTPS lifecycle that remains disconnected from desktop startup.
+- `encrypted_router`: authenticated routes plus bounded pairing begin/claim endpoints for encrypted transports only.
+- `HttpsServerHandle`: reports loopback-only HTTPS metadata and supports awaited graceful shutdown.
 
 ## Dependencies
 
-Axum and Tokio. Handlers call `LocalStreamCore` rather than duplicating domain/database logic.
+Axum, Hyper, Tokio, Tokio-Rustls, and Rustls. Handlers call `LocalStreamCore` rather than duplicating domain/database logic.
 
 ## Current Limitations
 
-The active server is deliberately unreachable from other LAN devices and continues to use the trusted-local router. A separately tested authenticated router exists, but encrypted transport, remote pairing routes, configurable LAN binding, static web hosting, CORS policy, and request rate limiting are not implemented. Direct Play is limited to eight concurrent streams.
+The active desktop server is deliberately unreachable from other LAN devices and continues to use the trusted-local HTTP router. The separate HTTPS lifecycle exposes native and browser pairing on loopback but is not started by Tauri. It accepts at most 64 TLS connections, allows five seconds for each handshake, validates one configured Host on every request, and requires exact same-origin Origin plus safe optional `Sec-Fetch-Site` on pairing POSTs. Browser cookies authenticate only safe GET library/media routes. Configurable LAN binding, static web hosting, unsafe cookie methods, and CSRF tokens are not implemented. Direct Play is limited to eight concurrent streams.
 
 ## Planned Work
 
-Design encrypted server identity and remote pairing/session transport while remaining loopback-only. Satisfy every ADR-0006 gate before enabling the authenticated router on a listener.
+Add same-origin static browser UI hosting while remaining loopback-only. Satisfy every ADR gate before any LAN binding.

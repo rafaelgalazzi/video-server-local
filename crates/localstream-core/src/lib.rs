@@ -23,6 +23,7 @@ pub struct AppInfo {
 pub struct LocalStreamCore {
     database: database::LibraryDatabase,
     pairing: auth::PairingService,
+    pairing_rate_limiter: auth::PairingRateLimiter,
     stream_permits: std::sync::Arc<tokio::sync::Semaphore>,
 }
 
@@ -36,11 +37,20 @@ pub enum CoreError {
     Database(#[from] DatabaseError),
 }
 
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum IdentityResetError {
+    #[error("trusted device revocation is unavailable")]
+    RevocationUnavailable,
+    #[error("the protected node identity store is unavailable")]
+    StoreUnavailable,
+}
+
 impl LocalStreamCore {
     pub fn open(database_path: impl AsRef<std::path::Path>) -> Result<Self, DatabaseError> {
         Ok(Self {
             database: database::LibraryDatabase::open(database_path.as_ref())?,
             pairing: auth::PairingService::default(),
+            pairing_rate_limiter: auth::PairingRateLimiter::default(),
             stream_permits: std::sync::Arc::new(tokio::sync::Semaphore::new(
                 MAX_CONCURRENT_STREAMS,
             )),
@@ -52,6 +62,7 @@ impl LocalStreamCore {
         Ok(Self {
             database: database::LibraryDatabase::in_memory()?,
             pairing: auth::PairingService::default(),
+            pairing_rate_limiter: auth::PairingRateLimiter::default(),
             stream_permits: std::sync::Arc::new(tokio::sync::Semaphore::new(
                 MAX_CONCURRENT_STREAMS,
             )),
@@ -114,6 +125,13 @@ impl LocalStreamCore {
         auth::authenticate(&self.database, bearer_token)
     }
 
+    pub fn authenticate_browser_session(
+        &self,
+        session_token: Option<&str>,
+    ) -> Result<auth::TrustedPeer, auth::AuthError> {
+        auth::session::authenticate(&self.database, session_token)
+    }
+
     pub fn revoke_peer(&self, peer_id: &str) -> Result<bool, auth::AuthError> {
         self.database.revoke_peer(peer_id).map_err(Into::into)
     }
@@ -122,11 +140,33 @@ impl LocalStreamCore {
         auth::active_peers(&self.database)
     }
 
+    pub fn reset_node_identity<S>(&self, store: &S) -> Result<usize, IdentityResetError>
+    where
+        S: node_identity::NodeSecretStore,
+    {
+        let revoked = self
+            .database
+            .revoke_all_peers()
+            .map_err(|_| IdentityResetError::RevocationUnavailable)?;
+        store
+            .delete()
+            .map_err(|_| IdentityResetError::StoreUnavailable)?;
+        Ok(revoked)
+    }
+
     pub fn begin_pairing(
         &self,
         display_name: &str,
     ) -> Result<auth::PairingReceipt, auth::PairingError> {
         self.pairing.begin(display_name)
+    }
+
+    pub fn check_pairing_attempt(
+        &self,
+        kind: auth::PairingAttemptKind,
+        remote: std::net::SocketAddr,
+    ) -> auth::RateLimitDecision {
+        self.pairing_rate_limiter.check(kind, remote)
     }
 
     pub fn pending_pairings(&self) -> Result<Vec<auth::PendingPairing>, auth::PairingError> {
@@ -152,6 +192,15 @@ impl LocalStreamCore {
     ) -> Result<auth::IssuedCredential, auth::PairingError> {
         self.pairing.claim(&self.database, request_id, claim_secret)
     }
+
+    pub fn claim_browser_pairing(
+        &self,
+        request_id: &str,
+        claim_secret: &str,
+    ) -> Result<auth::IssuedBrowserSession, auth::PairingError> {
+        self.pairing
+            .claim_browser(&self.database, request_id, claim_secret)
+    }
 }
 
 #[cfg(test)]
@@ -162,11 +211,37 @@ mod tests {
 
     use super::LocalStreamCore;
 
+    #[derive(Default)]
+    struct ResetStore {
+        deleted: std::sync::atomic::AtomicBool,
+        fail: bool,
+    }
+
+    impl crate::node_identity::NodeSecretStore for ResetStore {
+        fn load(&self) -> Result<Option<Vec<u8>>, crate::node_identity::SecretStoreError> {
+            Ok(None)
+        }
+
+        fn store(&self, _secret: &[u8]) -> Result<(), crate::node_identity::SecretStoreError> {
+            Ok(())
+        }
+
+        fn delete(&self) -> Result<(), crate::node_identity::SecretStoreError> {
+            if self.fail {
+                return Err(crate::node_identity::SecretStoreError::Unavailable);
+            }
+            self.deleted
+                .store(true, std::sync::atomic::Ordering::SeqCst);
+            Ok(())
+        }
+    }
+
     fn pairing_core(ttl: Duration, capacity: usize) -> LocalStreamCore {
         LocalStreamCore {
             database: crate::database::LibraryDatabase::in_memory()
                 .expect("in-memory database should open"),
             pairing: crate::auth::PairingService::for_test(ttl, capacity),
+            pairing_rate_limiter: crate::auth::PairingRateLimiter::default(),
             stream_permits: Arc::new(tokio::sync::Semaphore::new(super::MAX_CONCURRENT_STREAMS)),
         }
     }
@@ -334,6 +409,39 @@ mod tests {
     }
 
     #[test]
+    fn browser_session_survives_restart_without_plaintext_storage_and_tracks_revocation() {
+        let workspace = tempdir().expect("temporary workspace should be created");
+        let database = workspace.path().join("localstream.sqlite3");
+        let (peer_id, session_token) = {
+            let core = LocalStreamCore::open(&database).expect("database should open");
+            let receipt = core
+                .begin_pairing("Restart Browser")
+                .expect("pairing should begin");
+            core.approve_pairing(&receipt.request_id, &receipt.verification_code)
+                .expect("pairing should approve");
+            let session = core
+                .claim_browser_pairing(&receipt.request_id, &receipt.claim_secret)
+                .expect("browser session should issue");
+            (session.peer.id, session.session_token)
+        };
+
+        let database_bytes = fs::read(&database).expect("database should be readable");
+        assert!(!database_bytes
+            .windows(session_token.len())
+            .any(|window| window == session_token.as_bytes()));
+        {
+            let core = LocalStreamCore::open(&database).expect("database should reopen");
+            core.authenticate_browser_session(Some(&session_token))
+                .expect("session should survive restart");
+            assert!(core.revoke_peer(&peer_id).expect("peer should revoke"));
+        }
+        let core = LocalStreamCore::open(&database).expect("database should reopen again");
+        assert!(core
+            .authenticate_browser_session(Some(&session_token))
+            .is_err());
+    }
+
+    #[test]
     fn lists_only_safe_active_peer_metadata_and_persists_revocation() {
         let workspace = tempdir().expect("temporary workspace should be created");
         let database = workspace.path().join("localstream.sqlite3");
@@ -366,6 +474,48 @@ mod tests {
         assert!(!core
             .revoke_peer(&revoked_id)
             .expect("repeat revocation should be idempotent"));
+    }
+
+    #[test]
+    fn identity_reset_revokes_all_peers_before_deleting_the_root() {
+        let core = LocalStreamCore::in_memory().expect("in-memory core should open");
+        let first = core
+            .issue_peer_credential("Living Room TV")
+            .expect("first credential should issue");
+        let second = core
+            .issue_peer_credential("Bedroom Tablet")
+            .expect("second credential should issue");
+        let store = ResetStore::default();
+
+        let revoked = core
+            .reset_node_identity(&store)
+            .expect("identity should reset");
+
+        assert_eq!(revoked, 2);
+        assert!(store.deleted.load(std::sync::atomic::Ordering::SeqCst));
+        assert!(core.trusted_peers().expect("peers should load").is_empty());
+        assert!(core.authenticate_peer(Some(&first.bearer_token)).is_err());
+        assert!(core.authenticate_peer(Some(&second.bearer_token)).is_err());
+    }
+
+    #[test]
+    fn identity_reset_keeps_peers_revoked_when_protected_deletion_fails() {
+        let core = LocalStreamCore::in_memory().expect("in-memory core should open");
+        let issued = core
+            .issue_peer_credential("Living Room TV")
+            .expect("credential should issue");
+        let store = ResetStore {
+            fail: true,
+            ..ResetStore::default()
+        };
+
+        let error = core
+            .reset_node_identity(&store)
+            .expect_err("store failure should fail reset");
+
+        assert_eq!(error, super::IdentityResetError::StoreUnavailable);
+        assert!(core.trusted_peers().expect("peers should load").is_empty());
+        assert!(core.authenticate_peer(Some(&issued.bearer_token)).is_err());
     }
 
     #[test]

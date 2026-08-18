@@ -12,7 +12,10 @@ use thiserror::Error;
 
 use crate::database::LibraryDatabase;
 
-use super::{digest_token, issue_credential, validate_display_name, AuthError, IssuedCredential};
+use super::{
+    digest_token, issue_credential, session, validate_display_name, AuthError,
+    IssuedBrowserSession, IssuedCredential,
+};
 
 const DEFAULT_TTL: Duration = Duration::from_secs(120);
 const MAX_ACTIVE_REQUESTS: usize = 32;
@@ -235,6 +238,28 @@ impl PairingService {
         request_id: &str,
         claim_secret: &str,
     ) -> Result<IssuedCredential, PairingError> {
+        self.claim_using(request_id, claim_secret, |display_name| {
+            issue_credential(database, display_name)
+        })
+    }
+
+    pub(crate) fn claim_browser(
+        &self,
+        database: &LibraryDatabase,
+        request_id: &str,
+        claim_secret: &str,
+    ) -> Result<IssuedBrowserSession, PairingError> {
+        self.claim_using(request_id, claim_secret, |display_name| {
+            session::issue(database, display_name)
+        })
+    }
+
+    fn claim_using<T>(
+        &self,
+        request_id: &str,
+        claim_secret: &str,
+        issue: impl FnOnce(&str) -> Result<T, AuthError>,
+    ) -> Result<T, PairingError> {
         let display_name = {
             let mut state = self.state.lock().map_err(|_| PairingError::Unavailable)?;
             ensure_not_replayed(&state, request_id)?;
@@ -266,7 +291,7 @@ impl PairingService {
             request.display_name.clone()
         };
 
-        match issue_credential(database, &display_name) {
+        match issue(&display_name) {
             Ok(credential) => {
                 let mut state = self.state.lock().map_err(|_| PairingError::Unavailable)?;
                 state.requests.remove(request_id);

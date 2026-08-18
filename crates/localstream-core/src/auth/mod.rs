@@ -10,6 +10,11 @@ use crate::{database::LibraryDatabase, DatabaseError};
 mod pairing;
 pub(crate) use pairing::PairingService;
 pub use pairing::{PairingError, PairingReceipt, PendingPairing};
+mod rate_limit;
+pub(crate) use rate_limit::PairingRateLimiter;
+pub use rate_limit::{PairingAttemptKind, RateLimitDecision};
+pub(crate) mod session;
+pub use session::{IssuedBrowserSession, SESSION_COOKIE_NAME, SESSION_TTL_SECONDS};
 
 const TOKEN_PREFIX: &str = "ls_peer_";
 const TOKEN_BYTES: usize = 32;
@@ -162,7 +167,7 @@ pub(crate) fn active_peers(
         .collect()
 }
 
-fn parse_capability(value: &str) -> Result<PeerCapability, AuthError> {
+pub(super) fn parse_capability(value: &str) -> Result<PeerCapability, AuthError> {
     match value {
         LIBRARY_READ => Ok(PeerCapability::LibraryRead),
         _ => Err(AuthError::InvalidCredential),
