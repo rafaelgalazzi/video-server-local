@@ -15,6 +15,7 @@ LS-001 has verified frontend and Rust unit checks plus a Windows Tauri developme
 | Direct Play         | ✅   | ✅          | 🟡      | ?     | ?     | ?       | ?   |
 | Peer credentials    | ✅   | ✅          | 🟡      | ?     | ?     | ?       | ?   |
 | API authorization   | ✅   | ✅          | 🟡      | ?     | ?     | ?       | ?   |
+| Node-root identity  | ✅   | 🟡          | 🟡      | ?     | ?     | ?       | ?   |
 | mDNS                | —    | —           | ?       | ?     | ?     | ?       | ?   |
 | Pairing             | ✅   | ✅          | 🟡      | ?     | ?     | ?       | ?   |
 | Remote library      | —    | —           | ?       | ?     | ?     | ?       | ?   |

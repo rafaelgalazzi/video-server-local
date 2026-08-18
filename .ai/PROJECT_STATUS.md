@@ -33,10 +33,11 @@ Milestone 2 foundation: embedded HTTP API and loopback Direct Play.
 - Active trusted peers can be listed through path/token-free metadata and revoked persistently through a confirmation-based local UI.
 - A dormant authenticated Axum router strictly validates bearer credentials, enforces `library.read`, inserts safe peer identity, and returns uniform unauthorized responses.
 - ADR-0007 defines persistent private-PKI node identity, native certificate pinning, explicit browser trust onboarding, and same-origin secure browser sessions.
+- A reusable node-root service generates P-256 CA material, derives stable safe identity from SPKI, persists private PKCS#8 only through a platform secret-store boundary, and fails closed on corruption or storage failure.
 
 ## In Progress
 
-- Nothing. LS-012 is complete; no runtime network behavior changed.
+- Nothing. LS-013 is complete; node identity is not connected to application startup.
 
 ## Not Started
 
@@ -59,9 +60,10 @@ Milestone 2 foundation: embedded HTTP API and loopback Direct Play.
 - Pairing requests are intentionally memory-only and disappear on restart; network rate limiting is not implemented because no remote pairing route exists.
 - The approval UI has no real incoming requests until a later encrypted remote pairing transport exists.
 - The authenticated router is not attached to a listener; DD-007's resolved browser media credential design is not implemented.
-- ADR-0007 is design-only: node identity, TLS, browser trust installation, secure sessions, CSRF/origin checks, and encrypted pairing remain unimplemented.
+- Most ADR-0007 runtime work remains: node identity is not integrated, and TLS, browser trust installation, secure sessions, CSRF/origin checks, and encrypted pairing are unimplemented.
+- The node-root service has no startup integration, identity-reset workflow, leaf issuance, TLS use, or tested real OS keyring operation.
 - The repository has no commits; all current files are untracked at the time of this inspection.
 
 ## Next Major Goal
 
-Implement LS-013 persistent node-root identity and protected storage without enabling LAN binding.
+Implement LS-014 serialized startup integration and trusted-local node identity display without adding TLS or LAN binding.

@@ -4,6 +4,7 @@ use thiserror::Error;
 pub mod auth;
 mod database;
 pub mod media;
+pub mod node_identity;
 pub mod server;
 pub mod streaming;
 

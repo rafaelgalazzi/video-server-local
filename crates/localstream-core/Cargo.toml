@@ -9,11 +9,14 @@ rust-version.workspace = true
 axum = "0.8"
 base64 = "0.22"
 getrandom = "0.3"
+keyring = { version = "=3.6.3", features = ["apple-native", "crypto-rust", "linux-native-sync-persistent", "windows-native"] }
+rcgen = { version = "=0.14.7", features = ["zeroize"] }
 rusqlite = { version = "0.37", features = ["bundled"] }
 serde.workspace = true
 sha2 = "0.10"
 subtle = "2"
 thiserror = "2"
+time = "=0.3.36"
 tokio = { version = "1", features = ["fs", "io-util", "net", "rt", "sync"] }
 tokio-util = { version = "0.7", features = ["io"] }
 uuid = { version = "1", features = ["v4", "v5"] }

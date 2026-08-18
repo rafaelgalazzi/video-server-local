@@ -6,7 +6,7 @@ Provide framework-independent LocalStream domain services reusable by Tauri, HTT
 
 ## Features
 
-The crate exposes application identity information, scans explicitly approved video-library directories, persists the current library in SQLite, opens containment-checked Direct Play sources, manages revocable peer credentials, and hosts thin versioned Axum HTTP adapters.
+The crate exposes application identity information, scans explicitly approved video-library directories, persists the current library in SQLite, opens containment-checked Direct Play sources, manages revocable peer credentials, owns a protected node-root identity boundary, and hosts thin versioned Axum HTTP adapters.
 
 ## Important Files
 
@@ -16,6 +16,7 @@ The crate exposes application identity information, scans explicitly approved vi
 - `src/server/`: Axum router, loopback lifecycle, and API contracts.
 - `src/streaming/`: opaque-ID resolution, containment checks, and byte ranges.
 - `src/auth/`: secure peer credentials and bounded user-approved pairing lifecycle.
+- `src/node_identity/`: persistent private-CA identity and protected secret-store boundary.
 
 ## Public Interfaces
 
@@ -27,14 +28,16 @@ The crate exposes application identity information, scans explicitly approved vi
 - `server::start_local_server`: embedded loopback HTTP lifecycle.
 - `LocalStreamCore::open_direct_play`: bounded Direct Play source resolution.
 - `LocalStreamCore` peer credential issuance, authentication, and revocation methods.
+- `node_identity::NodeIdentityService`: fail-closed root identity generation/restoration.
+- `node_identity::NodeIdentitySummary`: safe stable node ID and SPKI fingerprint.
 
 ## Dependencies
 
-Axum and Tokio for the embedded server, bundled SQLite through rusqlite, Serde for transport-neutral serialization, walkdir for controlled traversal, UUID for opaque IDs, and thiserror for typed errors. The crate intentionally does not depend on Tauri.
+Axum and Tokio for the embedded server, bundled SQLite through rusqlite, Serde for transport-neutral serialization, walkdir for controlled traversal, UUID for opaque IDs, `rcgen` for X.509 identity material, `keyring` for platform protected storage, and thiserror for typed errors. The crate intentionally does not depend on Tauri.
 
 ## Current Limitations
 
-Remote pairing routes, approval UI, LAN authorization middleware/binding, compatibility inspection, audio, discovery, and FFmpeg services are not implemented. The in-memory pairing and credential core exists but must not be used over plaintext LAN HTTP. Direct Play supports single byte ranges and eight concurrent loopback streams. Rescans currently replace a complete library snapshot.
+Remote pairing routes, TLS/leaf issuance, root-trust installation, LAN binding, compatibility inspection, audio, discovery, and FFmpeg services are not implemented. Node identity is not yet connected to application startup, and headless protected storage needs a separately reviewed adapter. The in-memory pairing and credential core must not be used over plaintext LAN HTTP. Direct Play supports single byte ranges and eight concurrent loopback streams. Rescans currently replace a complete library snapshot.
 
 ## Planned Work
 

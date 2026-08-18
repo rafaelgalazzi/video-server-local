@@ -15,6 +15,7 @@ This document combines implemented safeguards with requirements for unimplemente
 - A dormant authenticated Axum router accepts exactly one strict bearer header, authenticates through the core, inserts safe peer identity, and protects library/stream routes with `library.read`.
 - Missing, malformed, unknown, and revoked credentials receive the same safe `401`; the active desktop listener still uses the loopback-only local router.
 - ADR-0007 requires a persistent private node CA: native clients pin its verified public-key fingerprint, while browser devices explicitly install it into their trust store after trusted-local fingerprint comparison.
+- The LS-013 core service generates/restores a P-256 CA key through an injected secret-store boundary, derives stable public identity from its SPKI, and fails closed for corrupt or unavailable protected storage. Its platform adapter targets Windows Credential Manager, Apple Keychain, and Linux Secret Service.
 - The future browser UI, API, and media routes share one HTTPS origin. Browser pairing establishes a revocable `HttpOnly`, `Secure`, `SameSite=Strict` session cookie; credentials are not placed in JavaScript storage or media URLs.
 - Pairing HTTP endpoints, client secret storage, encrypted transport, and network rate limiting are not yet implemented.
 
@@ -85,7 +86,7 @@ Credential persistence alone does not satisfy this gate. ADR-0006 requires encry
 
 LS-011 satisfies the protected-route and negative-authentication test portion only. It does not authorize enabling LAN binding because credentials would still cross plaintext HTTP and the ADR-0007 browser-session mechanism is unimplemented.
 
-ADR-0007 resolves the intended transport and initial browser-session architecture, but none of it is implemented. LAN binding remains prohibited until its identity, TLS, trust onboarding, encrypted pairing, session, CSRF/origin, rate-limit, and negative-test gates are complete.
+ADR-0007 resolves the intended transport and initial browser-session architecture. LS-013 implements only the reusable root-identity and storage boundary; it is not integrated into startup. LAN binding remains prohibited until TLS, trust onboarding, encrypted pairing, session, CSRF/origin, rate-limit, and negative-test gates are complete.
 
 ## Processes and Resources
 
