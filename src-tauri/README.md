@@ -12,6 +12,7 @@ The initial shell creates the main window and exposes the `app_info` command.
 
 - `tauri.conf.json`: desktop shell and build configuration.
 - `capabilities/default.json`: baseline main-window permissions.
+- `icons/app-icon.svg`: editable source for generated platform icons.
 - `src/lib.rs`: application builder and command registration.
 - `src/main.rs`: desktop executable entry point.
 

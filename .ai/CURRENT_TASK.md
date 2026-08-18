@@ -10,7 +10,7 @@ Initial Vue, Tauri, and reusable Rust-core scaffold
 
 ## Status
 
-Verification
+Completed
 
 ## Goal
 
@@ -45,33 +45,38 @@ Establish the first runnable project foundation from the product blueprint while
 - Created the standalone `localstream-core` crate and baseline Rust unit test.
 - Added npm quality commands and installed a locked dependency graph.
 - Ran the complete frontend verification pipeline successfully.
+- Generated all Tauri platform icon assets from `src-tauri/icons/app-icon.svg`.
+- Ran Rust formatting, Clippy, tests, and workspace compilation successfully.
+- Launched the Tauri application and confirmed its visible `LocalStream` window was responding on Windows.
 
 ## In Progress
 
-- Native verification is awaiting an installed Rust toolchain.
+- None.
 
 ## Remaining
 
-- Install a supported Rust toolchain and Tauri system prerequisites.
-- Run Rust formatting, Clippy, tests, and checks.
-- Launch `npm run tauri dev` and smoke-test the native adapter.
-- Resolve any native-only errors, then mark LS-001 completed.
+- None for LS-001.
 
 ## Tests Last Executed
 
 - `npm run verify` — PASS on 2026-08-18.
 - Vitest: 1 file and 2 tests passed.
 - Vite production build: PASS (16 modules transformed).
+- `cargo fmt --all --check` — PASS on 2026-08-18.
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings` — PASS.
+- `cargo test --workspace` — PASS; 1 core test passed.
+- `cargo check --workspace` — PASS.
+- `npm run tauri dev -- --no-watch` — PASS; Windows process and responsive window confirmed.
 
 ## Tests Not Yet Executed
 
-- Rust formatting, Clippy, unit tests, and checks.
-- Tauri development/build smoke test.
+- Release packaging and installer build.
+- Linux, macOS, Android, and iOS verification.
 
 ## Known Problems
 
-- `rustc`, `cargo`, and `rustup` are not installed or not available on `PATH` in the current environment.
 - `npm install` warns that transitive `eslint-visitor-keys@5.0.1` declares Node `^22.13.0` while the available runtime is 22.12.0. All frontend gates still passed; use Node 22.13+ for supported development.
+- Release bundling remains disabled; LS-001 verifies the development executable only.
 
 ## Assumptions
 
@@ -81,4 +86,4 @@ Establish the first runnable project foundation from the product blueprint while
 
 ## Next Exact Step
 
-Install Rust with rustup, restart the shell so Cargo is on `PATH`, and run `cargo fmt --all --check` from the repository root.
+Define LS-002 for the first approved-folder and media-library vertical slice.

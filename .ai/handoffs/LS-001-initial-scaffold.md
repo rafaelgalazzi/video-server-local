@@ -6,7 +6,7 @@ Create the initial Vue 3, Tauri 2, and reusable Rust-core project foundation wit
 
 ## Current State
 
-The frontend is implemented and verified. The Rust workspace and Tauri adapter are implemented but could not be compiled because Rust is unavailable on the machine.
+Completed. The frontend, Rust workspace, Tauri adapter, and Windows development runtime are verified.
 
 ## Changed Files
 
@@ -28,30 +28,31 @@ The frontend is implemented and verified. The Rust workspace and Tauri adapter a
 - Frontend dependency installation and lockfile.
 - Format, lint, typecheck, two composable tests, and production frontend build.
 - Thin Vue → Tauri → core application-information path.
+- Generated platform icon assets and a responsive Windows Tauri window.
 
 ## Remaining
 
-- Install Rust and Tauri Windows prerequisites.
-- Execute Rust checks and fix native-only findings.
-- Launch the Tauri application and verify the native-ready status appears.
+- None for LS-001. Release bundling and other platforms belong to later tasks.
 
 ## Tests Executed
 
 - `npm run verify` — PASS on 2026-08-18.
 - Result: Prettier, ESLint, vue-tsc, 2 Vitest tests, and Vite production build passed.
 - `npm install` audit — 0 vulnerabilities reported.
+- `cargo fmt --all --check` — PASS.
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings` — PASS.
+- `cargo test --workspace` — PASS; 1 core test passed.
+- `cargo check --workspace` — PASS.
+- `npm run tauri dev -- --no-watch` — PASS; the visible LocalStream window was responding.
 
 ## Tests Not Executed
 
-- `cargo fmt --all --check`
-- `cargo clippy --workspace --all-targets --all-features -- -D warnings`
-- `cargo test --workspace`
-- `cargo check --workspace`
-- `npm run tauri dev`
+- Release bundle/installer build.
+- Linux, macOS, Android, and iOS runs.
 
 ## Known Failures
 
-- Rust commands are unavailable because `rustc`, `cargo`, and `rustup` are not installed/on `PATH`.
+- Initial native compilation failed because `src-tauri/icons/icon.ico` was absent. Tauri-generated platform icon assets fixed the failure.
 - npm reports an engine warning for `eslint-visitor-keys@5.0.1` under Node 22.12; use Node 22.13+.
 
 ## Assumptions
@@ -61,10 +62,10 @@ The frontend is implemented and verified. The Rust workspace and Tauri adapter a
 
 ## Next Exact Action
 
-Install Rust through rustup, restart the shell, and run `cargo fmt --all --check` from the repository root.
+Define LS-002 with acceptance criteria for the approved-folder and media-library slice.
 
 ## Do Not
 
 - Move media or native business logic into Vue or Tauri commands.
-- Start media features before resolving native scaffold compilation findings.
+- Fold new product behavior into LS-001; create a new permanent task ID.
 - Claim Tauri or Rust verification until the listed commands run.

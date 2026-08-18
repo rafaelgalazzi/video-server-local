@@ -20,7 +20,7 @@ Milestone 1 foundation: Vue/Tauri shell and reusable Rust-core boundary.
 
 ## In Progress
 
-- LS-001 awaits Rust/Tauri verification because no Rust toolchain is installed.
+- Nothing. LS-001 is complete; the next product task has not been assigned.
 
 ## Not Started
 
@@ -34,11 +34,11 @@ Milestone 1 foundation: Vue/Tauri shell and reusable Rust-core boundary.
 
 ## Known Major Limitations
 
-- Rust and Tauri compilation/runtime behavior is unknown / not verified.
+- Release bundling and installer behavior is unknown / not verified.
 - The current local Node.js 22.12 environment is below one transitive lint dependency's declared minimum of 22.13, although verification executed successfully.
 - No product media flow is implemented.
 - The repository has no commits; all current files are untracked at the time of this inspection.
 
 ## Next Major Goal
 
-Install a supported Rust toolchain, verify LS-001 with Cargo and Tauri, then define the first approved-folder/library vertical slice.
+Define LS-002 for the first approved-folder/library vertical slice.

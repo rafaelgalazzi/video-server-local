@@ -18,11 +18,11 @@ Run `npm run dev`. The Vite preview listens on `http://localhost:1420`; it canno
 
 ## Starting Tauri
 
-Run `npm run tauri dev`. This was not executed on 2026-08-18 because Rust was unavailable.
+Run `npm run tauri dev`. This was verified on Windows on 2026-08-18.
 
 ## Running Rust Tests
 
-Run `cargo test --workspace`. Also use `cargo test -p localstream-core` for targeted core tests. Not yet verified locally.
+Run `cargo test --workspace`. Also use `cargo test -p localstream-core` for targeted core tests. The workspace command passed on Windows on 2026-08-18.
 
 ## Running Frontend Tests
 
@@ -57,7 +57,7 @@ cargo test --workspace
 cargo check --workspace
 ```
 
-These Rust commands are canonical but not yet verified in this repository.
+These Rust commands passed on Windows on 2026-08-18.
 
 ## Troubleshooting
 

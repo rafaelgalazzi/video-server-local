@@ -2,12 +2,12 @@
 
 Legend: ✅ Verified · 🟡 Partial · ❌ Failing · — Not implemented · ? Unknown / not verified
 
-No test suite or application implementation exists. “—” describes feature/test implementation; platform columns remain “?” because no platform verification ran.
+LS-001 has verified frontend and Rust unit checks plus a Windows Tauri development smoke test. Product media features remain unimplemented. Other platforms are unknown / not verified.
 
 | Feature             | Unit | Integration | Windows | Linux | macOS | Android | iOS |
 | ------------------- | ---- | ----------- | ------- | ----- | ----- | ------- | --- |
-| Frontend foundation | ✅   | —           | 🟡      | ?     | ?     | ?       | ?   |
-| Rust core boundary  | ?    | —           | ?       | ?     | ?     | ?       | ?   |
+| Frontend foundation | ✅   | 🟡          | ✅      | ?     | ?     | ?       | ?   |
+| Rust core boundary  | ✅   | 🟡          | ✅      | ?     | ?     | ?       | ?   |
 | Library scanner     | —    | —           | ?       | ?     | ?     | ?       | ?   |
 | SQLite              | —    | —           | ?       | ?     | ?     | ?       | ?   |
 | HTTP server         | —    | —           | ?       | ?     | ?     | ?       | ?   |
