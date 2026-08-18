@@ -1,0 +1,7 @@
+dist
+node_modules
+target
+src-tauri/gen
+package-lock.json
+LocalStream_AI_Project_Blueprint.md
+LocalStream_Code_Quality_Testing_Standard.md
