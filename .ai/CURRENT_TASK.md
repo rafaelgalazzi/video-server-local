@@ -2,11 +2,11 @@
 
 ## ID
 
-LS-008
+LS-009
 
 ## Title
 
-Bounded user-approved pairing requests
+Trusted-local pairing approval interface
 
 ## Status
 
@@ -14,35 +14,33 @@ Completed
 
 ## Goal
 
-Add a reusable, in-memory pairing-request lifecycle with cryptographic request/claim secrets, short-lived verification codes, explicit trusted-local approval or rejection, and single-use credential issuance while retaining loopback-only networking.
+Let the local desktop user review pending pairing requests and explicitly approve or reject them through thin Tauri decision commands without exposing request creation, credential claiming, or LAN access.
 
 ## Acceptance Criteria
 
-- Pairing requests use cryptographically random request IDs and 256-bit claim secrets.
-- Each request has a six-digit verification code and expires using monotonic time.
-- Pending requests are bounded globally and invalid display names are rejected.
-- Trusted-local callers can list pending requests and explicitly approve with the matching code or reject them.
-- Credential claim requires the matching high-entropy secret and an approved, unexpired request.
-- Approved requests issue exactly one LS-007 credential; replay and rejected requests fail closed.
-- Secret-bearing receipts and issued credentials are not serializable or debug-printable.
-- Thin Tauri commands expose only pending-list, approve, and reject operations—not remote request creation or credential claim.
-- Tests cover valid flow, invalid code/secret, rejection, expiration, replay, and capacity.
-- HTTP routes and loopback binding remain unchanged.
+- A pairing composable owns pending requests, loading/error/notice state, per-request decision state, and polling lifecycle.
+- Polling starts only after a successful native load and stops when the Vue shell unmounts.
+- Approval sends only the opaque request ID and displayed verification code; rejection sends only the request ID.
+- Successful decisions remove the request locally and provide accessible feedback.
+- Failed decisions retain the request and expose a retryable safe error.
+- A dedicated accessible component displays requesting-device name, grouped six-digit code, approximate expiry, and clear Allow/Reject actions.
+- The UI warns users to approve only when the code matches the requesting device.
+- Tests cover load, approval, rejection failure, and polling/cleanup.
+- No HTTP routes, request creation/claim adapter, or bind changes are introduced.
 
 ## Completed
 
-- Added an in-memory pairing service limited to 32 active requests with two-minute monotonic expiration.
-- Added collision-checked 128-bit request IDs, uniformly generated six-digit verification codes, and 256-bit claim secrets.
-- Stored only claim-secret digests in memory and compare them in constant time after strict shape validation.
-- Added pending listing plus explicit approve/reject decisions; approved requests disappear from the pending view.
-- Added single-use credential claims with bounded consumed/rejected/expired tombstones and fail-closed replay behavior.
-- Added thin trusted-local Tauri list/approve/reject commands without exposing request creation or credential claiming.
-- Added deterministic tests for approval, invalid code/secret, rejection, expiration, replay, capacity, and credential authentication.
-- Updated auth/core/Tauri documentation, API/security boundaries, test matrix, and project status.
+- Added `usePairingRequests` with typed Tauri adapters, pending state, decision state, safe feedback, and five-second polling.
+- Polling starts only after a successful first native load and is explicitly stopped when the app unmounts.
+- Successful approve/reject decisions remove requests locally; failed decisions retain them for retry.
+- Added five deterministic tests for load, exact approval arguments, rejection failure retention, polling/cleanup, and no polling after initial failure.
+- Added an accessible pairing panel with device name, grouped code, approximate expiry, comparison warning, Allow/Reject actions, retry, empty, loading, notice, and error states.
+- Integrated the panel into the Vue shell without adding request creation, claim, HTTP, or bind capabilities.
+- Updated root/frontend/component/composable documentation, security model, and project status.
 
 ## Tests Last Executed
 
-- `npm run verify` — PASS; format, lint, typecheck, 4 files / 12 frontend tests, and production build passed.
+- `npm run verify` — PASS; format, lint, typecheck, 5 files / 17 frontend tests, and production build passed.
 - `cargo fmt --all --check` — PASS.
 - `cargo clippy --workspace --all-targets --all-features -- -D warnings` — PASS.
 - `cargo test --workspace` — PASS; 27 core/workspace tests passed.
@@ -51,20 +49,21 @@ Add a reusable, in-memory pairing-request lifecycle with cryptographic request/c
 
 ## Tests Not Yet Executed
 
-- Pairing approval UI, remote encrypted pairing routes, network rate limiting, and HTTP authorization middleware; these do not exist.
-- Interactive Tauri approval actions and non-Windows platforms.
+- Interactive Windows Tauri rendering, polling, approval, rejection, and retry with a real pending request.
+- Remote encrypted pairing transport, because it does not exist.
+- Non-Windows platforms.
 
 ## Known Problems
 
-- None confirmed for the LS-008 scope.
+- None confirmed for the LS-009 automated scope.
 
 ## Assumptions
 
-- Pairing request creation and credential claim remain core APIs without HTTP or Tauri exposure.
-- Verification codes support human comparison; only the 256-bit claim secret authorizes credential claiming.
-- Requests intentionally disappear on process restart.
-- LAN binding remains prohibited by ADR-0006.
+- Five-second polling is appropriate for short-lived local approval requests.
+- Browser preview performs one failed native load and does not continue polling.
+- Verification codes are passed back exactly as displayed after the user chooses Allow.
+- ADR-0006 continues to prohibit LAN binding.
 
 ## Next Exact Step
 
-Define LS-009 for a Vue trusted-local pairing approval interface that polls pending requests and invokes only approve/reject commands while networking remains loopback-only.
+Define LS-010 for safe trusted-peer listing and persistent revocation controls in the core, Tauri adapter, and Vue UI.

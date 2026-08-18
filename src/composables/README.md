@@ -10,6 +10,7 @@ Own reusable Vue-native state and coordinate typed backend adapters without intr
 - `useMediaLibrary`: restores persisted library state and coordinates approved-folder selection and safe scan results.
 - `useServerStatus`: loads the embedded HTTP server's safe address and exposure state.
 - `usePlayback`: owns selected media, opaque-ID stream URL construction, and playback state.
+- `usePairingRequests`: polls trusted-local pending requests and coordinates approve/reject decisions.
 
 ## Important Files
 
@@ -21,6 +22,8 @@ Own reusable Vue-native state and coordinate typed backend adapters without intr
 - `useServerStatus.test.ts`: loopback success and failure tests.
 - `usePlayback.ts`: Direct Play selection, URL, and event state.
 - `usePlayback.test.ts`: URL safety, API availability, playback-event, and reset tests.
+- `usePairingRequests.ts`: pending request state, decision orchestration, and polling lifecycle.
+- `usePairingRequests.test.ts`: load, decision, failure retention, polling, and cleanup tests.
 
 ## Public Interfaces
 
@@ -32,7 +35,7 @@ Vue Composition API and the Tauri `invoke` adapter.
 
 ## Current Limitations
 
-Browser preview cannot call native commands and intentionally shows a non-fatal preview state. The desktop adapter restores the current SQLite-backed library on startup.
+Browser preview cannot call native commands and intentionally shows non-fatal preview states. Pairing polling starts only after its first native load succeeds, so preview failures do not repeat. The desktop adapter restores the current SQLite-backed library on startup.
 
 ## Planned Work
 

@@ -1,18 +1,21 @@
 <script setup lang="ts">
-import { onMounted, watch } from 'vue'
+import { onMounted, onUnmounted, watch } from 'vue'
 import FoundationStatus from './components/FoundationStatus.vue'
 import MediaLibraryPanel from './components/MediaLibraryPanel.vue'
+import PairingRequestsPanel from './components/PairingRequestsPanel.vue'
 import PlaybackPanel from './components/PlaybackPanel.vue'
 import ServerStatus from './components/ServerStatus.vue'
 import { useAppInfo } from './composables/useAppInfo'
 import { useMediaLibrary } from './composables/useMediaLibrary'
 import { usePlayback } from './composables/usePlayback'
+import { usePairingRequests } from './composables/usePairingRequests'
 import { useServerStatus } from './composables/useServerStatus'
 
 const { appInfo, error, isLoading, load, runtimeLabel } = useAppInfo()
 const mediaLibrary = useMediaLibrary()
 const serverStatus = useServerStatus()
 const playback = usePlayback(serverStatus.server)
+const pairing = usePairingRequests()
 
 watch(
   () => mediaLibrary.library.value?.items,
@@ -31,7 +34,10 @@ onMounted(() => {
   void load()
   void mediaLibrary.loadCurrentLibrary()
   void serverStatus.load()
+  void pairing.startPolling()
 })
+
+onUnmounted(() => pairing.stopPolling())
 </script>
 
 <template>
@@ -79,6 +85,17 @@ onMounted(() => {
         :error="serverStatus.error.value"
         :server="serverStatus.server.value"
         :status-label="serverStatus.statusLabel.value"
+      />
+
+      <PairingRequestsPanel
+        :error="pairing.error.value"
+        :is-deciding="pairing.isDeciding"
+        :is-loading="pairing.isLoading.value"
+        :notice="pairing.notice.value"
+        :requests="pairing.requests.value"
+        @approve="pairing.approve"
+        @reject="pairing.reject"
+        @retry="pairing.startPolling"
       />
     </section>
 

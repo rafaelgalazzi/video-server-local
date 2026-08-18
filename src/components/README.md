@@ -9,6 +9,7 @@ Present accessible UI from typed props and events. Components do not own filesys
 - `FoundationStatus.vue` renders native-core availability and retry state.
 - `MediaLibraryPanel.vue` renders folder-selection, scan feedback, empty state, safe media summaries, and API-aware Play actions.
 - `PlaybackPanel.vue` renders the selected title, native video controls, loading/error feedback, and close action.
+- `PairingRequestsPanel.vue` renders safe pending-device metadata, matching-code guidance, expiry, and explicit Allow/Reject actions.
 - `ServerStatus.vue` renders the embedded API address and its loopback/LAN availability state.
 
 ## Public Interfaces
@@ -21,7 +22,7 @@ Vue presentation APIs and types from `src/composables` where appropriate.
 
 ## Current Limitations
 
-Playback depends on the browser's native codec/container support. Artwork, search, transcoding fallback, and playback persistence are not implemented.
+Playback depends on the browser's native codec/container support. Pairing requests cannot arrive remotely yet. Artwork, search, transcoding fallback, peer administration, and playback persistence are not implemented.
 
 ## Planned Work
 

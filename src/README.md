@@ -6,7 +6,7 @@ This directory contains the Vue 3 + TypeScript presentation layer.
 
 ## Features
 
-The shell displays product identity, loads framework-independent application information, presents an approved-folder video scan, and plays selected items through the private loopback API.
+The shell displays product identity, loads framework-independent application information, presents an approved-folder video scan, plays selected items through the private loopback API, and lets the local user decide pending pairing requests.
 
 ## Important Files
 
@@ -16,6 +16,7 @@ The shell displays product identity, loads framework-independent application inf
 - `components/`: presentation components.
 - `composables/`: reusable Vue state and backend orchestration.
 - `components/PlaybackPanel.vue`: native-controls Direct Play presentation.
+- `components/PairingRequestsPanel.vue`: trusted-local pairing review and decision presentation.
 
 ## Public Interfaces
 
@@ -27,7 +28,7 @@ Vue 3, Vite, TypeScript, and the Tauri JavaScript API.
 
 ## Current Limitations
 
-The current library is persisted locally in SQLite and selected items can use browser-native Direct Play. Routing, server control, compatibility fallback, and LAN playback are not implemented.
+The current library is persisted locally in SQLite, selected items can use browser-native Direct Play, and the local UI polls for pairing decisions after native startup. Routing, server control, compatibility fallback, remote pairing transport, and LAN playback are not implemented.
 
 ## Planned Work
 
