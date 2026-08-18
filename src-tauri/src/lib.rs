@@ -66,6 +66,22 @@ fn reject_pairing(
         .map_err(|error| error.to_string())
 }
 
+#[tauri::command]
+fn trusted_peers(
+    core: tauri::State<'_, Arc<LocalStreamCore>>,
+) -> Result<Vec<localstream_core::auth::TrustedPeerSummary>, String> {
+    core.trusted_peers().map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn revoke_trusted_peer(
+    core: tauri::State<'_, Arc<LocalStreamCore>>,
+    peer_id: String,
+) -> Result<bool, String> {
+    core.revoke_peer(&peer_id)
+        .map_err(|error| error.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -90,8 +106,10 @@ pub fn run() {
             current_library,
             pending_pairings,
             reject_pairing,
+            revoke_trusted_peer,
             server_info,
-            select_and_scan_library
+            select_and_scan_library,
+            trusted_peers
         ])
         .run(tauri::generate_context!())
         .expect("failed to run LocalStream");

@@ -30,6 +30,15 @@ pub struct TrustedPeer {
     pub capability: PeerCapability,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrustedPeerSummary {
+    pub id: String,
+    pub display_name: String,
+    pub capability: PeerCapability,
+    pub created_at: i64,
+}
+
 pub struct IssuedCredential {
     pub peer: TrustedPeer,
     pub bearer_token: String,
@@ -125,15 +134,39 @@ pub(crate) fn authenticate(
     if record.revoked {
         return Err(AuthError::RevokedCredential);
     }
-    let capability = match record.capability.as_str() {
-        LIBRARY_READ => PeerCapability::LibraryRead,
-        _ => return Err(AuthError::InvalidCredential),
-    };
+    let capability = parse_capability(&record.capability)?;
     Ok(TrustedPeer {
         id: record.id,
         display_name: record.display_name,
         capability,
     })
+}
+
+pub(crate) fn active_peers(
+    database: &LibraryDatabase,
+) -> Result<Vec<TrustedPeerSummary>, AuthError> {
+    database
+        .active_peers()?
+        .into_iter()
+        .map(|record| {
+            if record.revoked {
+                return Err(AuthError::Unavailable);
+            }
+            Ok(TrustedPeerSummary {
+                id: record.id,
+                display_name: record.display_name,
+                capability: parse_capability(&record.capability)?,
+                created_at: record.created_at,
+            })
+        })
+        .collect()
+}
+
+fn parse_capability(value: &str) -> Result<PeerCapability, AuthError> {
+    match value {
+        LIBRARY_READ => Ok(PeerCapability::LibraryRead),
+        _ => Err(AuthError::InvalidCredential),
+    }
 }
 
 pub(super) fn digest_token(token: &str) -> [u8; 32] {

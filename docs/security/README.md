@@ -11,6 +11,7 @@ This document combines implemented safeguards with requirements for unimplemente
 - The in-memory pairing service limits active requests to 32, expires them after two monotonic minutes, uses collision-checked cryptographic request IDs and 256-bit claim secrets, compares claim digests in constant time, requires a matching six-digit approval code, and makes claims single-use.
 - Trusted-local Tauri adapters can only list, approve, or reject requests. They cannot create requests or claim credentials.
 - The local Vue interface polls pending requests after native startup, warns users to compare codes, and exposes explicit Allow/Reject actions with retryable failure state.
+- Trusted-peer administration exposes only opaque ID, display name, `library.read`, and creation time. Revocation requires a separate confirmation step, persists across restart, and immediately invalidates authentication.
 - Pairing HTTP endpoints, client secret storage, network rate limiting, and LAN authentication middleware are not yet implemented.
 
 ### Threat Model
@@ -21,7 +22,7 @@ This document combines implemented safeguards with requirements for unimplemente
 | Pairing flow                 | Guessing, replay, approval bypass, or request flooding | Bounded expiring requests, explicit local UI decisions, 256-bit claim secrets, and replay tombstones; no remote surface | Encrypted and rate-limited request/claim routes                                |
 | Bearer credential in transit | Passive capture and replay                             | Credentials never traverse the LAN                                                                                      | Encrypted channel with authenticated server identity                           |
 | SQLite credential store      | Database disclosure exposes reusable secrets           | Only SHA-256 digests are stored; tokens have 256 random bits                                                            | Protect application data using platform controls and avoid backups/log leakage |
-| Trusted client               | Client secret theft or loss                            | Revocation is persistent and immediate in the core                                                                      | Platform-appropriate secure client storage and peer management UI              |
+| Trusted client               | Client secret theft or loss                            | Local peer listing and confirmation-based persistent revocation                                                         | Platform-appropriate secure client storage                                     |
 | Authorization                | Valid peer invokes excessive capabilities              | Only explicit `library.read` exists and unknown values fail closed                                                      | Route-level capability middleware and negative tests                           |
 | Local adapter                | Untrusted remote input invokes credential issuance     | Tauri and Vue expose only list/approve/reject; issuance requires an approved high-entropy claim                         | Keep request creation/claim off the Tauri surface                              |
 

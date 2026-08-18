@@ -6,7 +6,7 @@ This directory contains the Vue 3 + TypeScript presentation layer.
 
 ## Features
 
-The shell displays product identity, loads framework-independent application information, presents an approved-folder video scan, plays selected items through the private loopback API, and lets the local user decide pending pairing requests.
+The shell displays product identity, loads framework-independent application information, presents an approved-folder video scan, plays selected items through the private loopback API, lets the local user decide pairing requests, and administers trusted devices.
 
 ## Important Files
 
@@ -17,6 +17,7 @@ The shell displays product identity, loads framework-independent application inf
 - `composables/`: reusable Vue state and backend orchestration.
 - `components/PlaybackPanel.vue`: native-controls Direct Play presentation.
 - `components/PairingRequestsPanel.vue`: trusted-local pairing review and decision presentation.
+- `components/TrustedPeersPanel.vue`: safe active-peer listing and confirmation-based revocation.
 
 ## Public Interfaces
 

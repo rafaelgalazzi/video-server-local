@@ -11,6 +11,7 @@ Own reusable Vue-native state and coordinate typed backend adapters without intr
 - `useServerStatus`: loads the embedded HTTP server's safe address and exposure state.
 - `usePlayback`: owns selected media, opaque-ID stream URL construction, and playback state.
 - `usePairingRequests`: polls trusted-local pending requests and coordinates approve/reject decisions.
+- `useTrustedPeers`: loads safe peer summaries and owns confirmation-based revocation state.
 
 ## Important Files
 
@@ -24,6 +25,8 @@ Own reusable Vue-native state and coordinate typed backend adapters without intr
 - `usePlayback.test.ts`: URL safety, API availability, playback-event, and reset tests.
 - `usePairingRequests.ts`: pending request state, decision orchestration, and polling lifecycle.
 - `usePairingRequests.test.ts`: load, decision, failure retention, polling, and cleanup tests.
+- `useTrustedPeers.ts`: active-peer load, confirmation, cancellation, and revocation orchestration.
+- `useTrustedPeers.test.ts`: safe load, confirmation, success, cancellation, and failure-retention tests.
 
 ## Public Interfaces
 

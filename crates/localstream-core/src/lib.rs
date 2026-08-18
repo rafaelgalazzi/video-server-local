@@ -117,6 +117,10 @@ impl LocalStreamCore {
         self.database.revoke_peer(peer_id).map_err(Into::into)
     }
 
+    pub fn trusted_peers(&self) -> Result<Vec<auth::TrustedPeerSummary>, auth::AuthError> {
+        auth::active_peers(&self.database)
+    }
+
     pub fn begin_pairing(
         &self,
         display_name: &str,
@@ -326,6 +330,41 @@ mod tests {
         assert!(!database_bytes
             .windows(token.len())
             .any(|window| window == token.as_bytes()));
+    }
+
+    #[test]
+    fn lists_only_safe_active_peer_metadata_and_persists_revocation() {
+        let workspace = tempdir().expect("temporary workspace should be created");
+        let database = workspace.path().join("localstream.sqlite3");
+        let (revoked_id, active_id) = {
+            let core = LocalStreamCore::open(&database).expect("database should open");
+            let revoked = core
+                .issue_peer_credential("Old Television")
+                .expect("first credential should issue");
+            let active = core
+                .issue_peer_credential("Kitchen Tablet")
+                .expect("second credential should issue");
+            assert!(core
+                .revoke_peer(&revoked.peer.id)
+                .expect("peer should revoke"));
+            (revoked.peer.id, active.peer.id)
+        };
+
+        let core = LocalStreamCore::open(&database).expect("database should reopen");
+        let peers = core.trusted_peers().expect("active peers should load");
+
+        assert_eq!(peers.len(), 1);
+        assert_eq!(peers[0].id, active_id);
+        assert_ne!(peers[0].id, revoked_id);
+        assert_eq!(peers[0].display_name, "Kitchen Tablet");
+        assert!(peers[0].created_at > 0);
+        let json = serde_json::to_string(&peers).expect("safe peers should serialize");
+        assert!(!json.contains("token"));
+        assert!(!json.contains("digest"));
+        assert!(!json.contains("path"));
+        assert!(!core
+            .revoke_peer(&revoked_id)
+            .expect("repeat revocation should be idempotent"));
     }
 
     #[test]

@@ -27,6 +27,7 @@ pub(crate) struct TrustedPeerRecord {
     pub id: String,
     pub display_name: String,
     pub capability: String,
+    pub created_at: i64,
     pub revoked: bool,
 }
 
@@ -296,7 +297,7 @@ impl LibraryDatabase {
             .lock()
             .map_err(|_| DatabaseError::Unavailable)?
             .query_row(
-                "SELECT id, display_name, capability, revoked
+                "SELECT id, display_name, capability, created_at, revoked
                  FROM trusted_peers WHERE token_digest = ?1",
                 [token_digest.as_slice()],
                 |row| {
@@ -304,12 +305,41 @@ impl LibraryDatabase {
                         id: row.get(0)?,
                         display_name: row.get(1)?,
                         capability: row.get(2)?,
-                        revoked: row.get(3)?,
+                        created_at: row.get(3)?,
+                        revoked: row.get(4)?,
                     })
                 },
             )
             .optional()
             .map_err(|_| DatabaseError::Unavailable)
+    }
+
+    pub(crate) fn active_peers(&self) -> Result<Vec<TrustedPeerRecord>, DatabaseError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| DatabaseError::Unavailable)?;
+        let mut statement = connection
+            .prepare(
+                "SELECT id, display_name, capability, created_at, revoked
+                 FROM trusted_peers WHERE revoked = 0
+                 ORDER BY created_at DESC, display_name COLLATE NOCASE, id",
+            )
+            .map_err(|_| DatabaseError::Unavailable)?;
+        let peers = statement
+            .query_map([], |row| {
+                Ok(TrustedPeerRecord {
+                    id: row.get(0)?,
+                    display_name: row.get(1)?,
+                    capability: row.get(2)?,
+                    created_at: row.get(3)?,
+                    revoked: row.get(4)?,
+                })
+            })
+            .map_err(|_| DatabaseError::Unavailable)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|_| DatabaseError::InvalidText)?;
+        Ok(peers)
     }
 
     pub(crate) fn revoke_peer(&self, peer_id: &str) -> Result<bool, DatabaseError> {

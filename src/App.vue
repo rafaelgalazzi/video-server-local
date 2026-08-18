@@ -5,17 +5,20 @@ import MediaLibraryPanel from './components/MediaLibraryPanel.vue'
 import PairingRequestsPanel from './components/PairingRequestsPanel.vue'
 import PlaybackPanel from './components/PlaybackPanel.vue'
 import ServerStatus from './components/ServerStatus.vue'
+import TrustedPeersPanel from './components/TrustedPeersPanel.vue'
 import { useAppInfo } from './composables/useAppInfo'
 import { useMediaLibrary } from './composables/useMediaLibrary'
 import { usePlayback } from './composables/usePlayback'
 import { usePairingRequests } from './composables/usePairingRequests'
 import { useServerStatus } from './composables/useServerStatus'
+import { useTrustedPeers } from './composables/useTrustedPeers'
 
 const { appInfo, error, isLoading, load, runtimeLabel } = useAppInfo()
 const mediaLibrary = useMediaLibrary()
 const serverStatus = useServerStatus()
 const playback = usePlayback(serverStatus.server)
 const pairing = usePairingRequests()
+const trustedPeers = useTrustedPeers()
 
 watch(
   () => mediaLibrary.library.value?.items,
@@ -35,6 +38,7 @@ onMounted(() => {
   void mediaLibrary.loadCurrentLibrary()
   void serverStatus.load()
   void pairing.startPolling()
+  void trustedPeers.load()
 })
 
 onUnmounted(() => pairing.stopPolling())
@@ -96,6 +100,19 @@ onUnmounted(() => pairing.stopPolling())
         @approve="pairing.approve"
         @reject="pairing.reject"
         @retry="pairing.startPolling"
+      />
+
+      <TrustedPeersPanel
+        :confirming-peer="trustedPeers.confirmingPeer.value"
+        :error="trustedPeers.error.value"
+        :is-loading="trustedPeers.isLoading.value"
+        :is-revoking="trustedPeers.isRevoking.value"
+        :notice="trustedPeers.notice.value"
+        :peers="trustedPeers.peers.value"
+        @cancel="trustedPeers.cancelRevocation"
+        @confirm="trustedPeers.confirmRevocation"
+        @refresh="trustedPeers.load"
+        @revoke="trustedPeers.requestRevocation"
       />
     </section>
 

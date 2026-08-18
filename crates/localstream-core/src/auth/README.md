@@ -11,6 +11,7 @@ Own revocable peer credential generation and verification independently of Tauri
 - Safe peer identity with an explicit `library.read` capability.
 - Missing, invalid, and revoked credential outcomes.
 - Persistent revocation through the core-owned SQLite database.
+- Safe active-peer summaries containing no credential or filesystem data.
 - In-memory pairing requests limited to 32 active entries and two-minute monotonic lifetimes.
 - Cryptographic request IDs and 256-bit claim secrets plus six-digit human verification codes.
 - Explicit approval/rejection and single-use credential claiming with replay tombstones.
@@ -25,6 +26,7 @@ Own revocable peer credential generation and verification independently of Tauri
 - `LocalStreamCore::issue_peer_credential`: trusted-local credential issuance foundation.
 - `LocalStreamCore::authenticate_peer`: bearer credential verification.
 - `LocalStreamCore::revoke_peer`: persistent revocation by opaque peer ID.
+- `LocalStreamCore::trusted_peers`: safe active-peer administration view.
 - `LocalStreamCore` pairing methods: begin, list pending, approve, reject, and claim.
 
 ## Dependencies

@@ -30,14 +30,15 @@ Milestone 2 foundation: embedded HTTP API and loopback Direct Play.
 - Bounded two-minute pairing requests use cryptographic IDs/claim secrets, human verification codes, explicit local decisions, and single-use replay protection.
 - Thin Tauri commands can list, approve, or reject pending pairing requests without exposing creation or credential claiming.
 - Vue polls pending pairing requests only after native availability and presents accessible code comparison, expiry, Allow/Reject, and retry states.
+- Active trusted peers can be listed through path/token-free metadata and revoked persistently through a confirmation-based local UI.
 
 ## In Progress
 
-- Nothing. LS-009 is complete; remote pairing and LAN exposure remain gated by ADR-0006.
+- Nothing. LS-010 is complete; remote pairing and LAN exposure remain gated by ADR-0006.
 
 ## Not Started
 
-- Trusted-peer administration/revocation UI, encrypted pairing HTTP routes, authorization middleware, and safe LAN binding.
+- Encrypted pairing HTTP routes, authorization middleware, client secure storage, and safe LAN binding.
 - Web UI hosting for remote browser clients.
 - Node discovery, pairing, trust, and distributed libraries.
 - FFmpeg probing/transcoding and concurrency management.
@@ -59,4 +60,4 @@ Milestone 2 foundation: embedded HTTP API and loopback Direct Play.
 
 ## Next Major Goal
 
-Define LS-010 for trusted-peer listing and persistent revocation controls.
+Define LS-011 for bearer authentication and `library.read` authorization middleware while retaining loopback-only binding.

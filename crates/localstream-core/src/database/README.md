@@ -11,6 +11,7 @@ Persist approved libraries and internal media-location records in embedded SQLit
 - Current-library restoration across core/application restarts.
 - Internal absolute paths retained for trusted, containment-checked playback resolution.
 - Schema-v2 trusted peer metadata, SHA-256 credential digests, capabilities, and persistent revocation.
+- Active-peer listing that excludes token digests and revoked records from public core models.
 - Bundled SQLite library; no external database process is required.
 
 ## Important Files
