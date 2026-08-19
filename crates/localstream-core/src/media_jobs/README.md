@@ -30,4 +30,4 @@ Tokio provides bounded channels, workers, synchronization, cancellation, and fil
 
 ## Limitations and Planned Work
 
-Reservations are conservative caller estimates and completed outputs retain their reservation until released. LS-047 and LS-048 will supply concrete remux/transcode work and progress parsing.
+Reservations are conservative caller estimates and completed outputs retain their reservation until released. Remux/transcode jobs currently report lifecycle progress rather than parsed FFmpeg frame/time progress.

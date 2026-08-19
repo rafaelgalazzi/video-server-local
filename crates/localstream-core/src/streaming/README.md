@@ -29,8 +29,8 @@ Tokio provides asynchronous filesystem I/O. Persisted location records remain pr
 
 ## Limitations
 
-Only single byte ranges are supported. Compatibility decisions live in `compatibility/`; multipart ranges, conditional requests, and transform execution are not implemented here.
+Only single byte ranges are supported. Compatibility decisions and transforms live in dedicated modules; multipart ranges and conditional requests are not implemented here.
 
 ## Planned Work
 
-LS-047 and LS-048 will execute the compatibility engine's remux/transcode decisions.
+The local playback coordinator selects Direct Play or completed transform output. Future remote transports must reuse it.

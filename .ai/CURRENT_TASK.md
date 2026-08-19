@@ -2,11 +2,11 @@
 
 ## ID
 
-LS-048
+LS-032
 
 ## Title
 
-Transcode fallback
+Discovery protocol ADR and service contract
 
 ## Status
 
@@ -14,7 +14,7 @@ Not Started
 
 ## Goal
 
-Implement bounded video/audio transcoding and subtitle conversion or burn-in profiles for measured browser compatibility gaps.
+Define the offline mDNS discovery contract, validation rules, lifecycle semantics, and trust boundary before implementation.
 
 ## Completed
 
@@ -25,17 +25,20 @@ Implement bounded video/audio transcoding and subtitle conversion or burn-in pro
 - LS-045 explicit client-capability decision engine with Direct Play → remux → transcode precedence and stable reason codes.
 - LS-046 bounded media job concurrency, queues, deduplication, cancellation, temporary reservations, cleanup, and safe progress snapshots.
 - LS-047 containment-checked MP4/WebM remux jobs with exact selected-track stream-copy mapping and opaque output access.
+- LS-048 software-only MP4/WebM transcode profiles with selected audio, subtitle conversion, and text/bitmap burn-in.
+- LS-049 local playback coordinator and desktop integration with explicit capabilities, Direct Play precedence, fallback progress/error/cancel states, opaque Range output, and cleanup.
 
 ## Verification
 
-- Real FFmpeg/ffprobe coverage verifies playable WebM output, exact second-audio selection, embedded text subtitle mapping, cancellation, unsupported requests, containment, and quota rejection.
+- End-to-end MKV coverage verifies Direct Play, selected-track remux, transcode, selection changes, cancellation, retry, subtitle conversion/burn-in, and playable outputs.
+- Desktop UI tests cover completed fallback URLs and cancellation/release cleanup.
 
 ## Remaining
 
-- Define conservative software video/audio encoding profiles for MP4 and WebM.
-- Map selected audio and subtitle conversion/burn-in modes through structured FFmpeg arguments.
-- Cover representative output codecs, cancellation/concurrency, quotas, track correctness, and Direct Play precedence.
+- Define the local-only mDNS service type and minimal non-secret records.
+- Specify endpoint, stable node ID, size, TTL, conflict, and trust validation.
+- Add parser/model tests and document privacy/security limits in an accepted ADR.
 
 ## Next Exact Step
 
-Implement LS-048 bounded transcode fallback through the existing compatibility, process, and job boundaries.
+Implement LS-032 discovery protocol ADR and transport-neutral service contract.

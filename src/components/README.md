@@ -26,7 +26,7 @@ Vue presentation APIs and types from `src/composables` where appropriate.
 
 ## Current Limitations
 
-Playback depends on the browser's native codec/container support. Artwork, search, transcoding fallback, and playback persistence are not implemented.
+Fallback profiles are intentionally software-only and desktop-local; physical browser/device compatibility remains to be verified. Artwork, search, and playback-position persistence are not implemented.
 
 ## Planned Work
 

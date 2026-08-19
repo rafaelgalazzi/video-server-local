@@ -4,6 +4,15 @@ import type { MediaItem } from './useMediaLibrary'
 import type { ServerInfo } from './useServerStatus'
 
 export type PlaybackStatus = 'idle' | 'loading' | 'playing' | 'error'
+interface PlaybackPreparation {
+  method: 'direct_play' | 'remux' | 'transcode'
+  jobId: string | null
+  outputName: string | null
+}
+interface PlaybackJob {
+  state: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled'
+  progressPermille: number
+}
 export interface AudioOption {
   id: string
   label: string
@@ -31,6 +40,7 @@ export function usePlayback(
   canPersistAudio: Ref<boolean> = ref(true),
   saveAudioSelection: AudioSelectionSaver = saveWithTauri,
   saveSubtitleSelection: SubtitleSelectionSaver = saveSubtitleWithTauri,
+  enableFallback: Ref<boolean> = ref(false),
 ) {
   const selectedItem = ref<MediaItem | null>(null)
   const status = ref<PlaybackStatus>('idle')
@@ -39,6 +49,9 @@ export function usePlayback(
   const isSavingAudio = ref(false)
   const subtitleSelectionError = ref<string | null>(null)
   const isSavingSubtitle = ref(false)
+  const playbackProgress = ref<number | null>(null)
+  const activeJobId = ref<string | null>(null)
+  const preparedStreamUrl = ref<string | null>(null)
 
   const audioOptions = computed<AudioOption[]>(() =>
     (selectedItem.value?.metadata?.audioTracks ?? []).map((track, index) => ({
@@ -95,6 +108,7 @@ export function usePlayback(
 
   const streamUrl = computed(() => {
     if (!server.value || !selectedItem.value) return null
+    if (preparedStreamUrl.value) return preparedStreamUrl.value
     const baseUrl = server.value.baseUrl.replace(/\/$/, '')
     return `${baseUrl}/api/v1/media/${encodeURIComponent(selectedItem.value.id)}/stream`
   })
@@ -114,6 +128,9 @@ export function usePlayback(
     error.value = null
     audioSelectionError.value = null
     subtitleSelectionError.value = null
+    preparedStreamUrl.value = null
+    playbackProgress.value = null
+    if (enableFallback.value) void prepare(item)
   }
 
   function markPlaying() {
@@ -125,15 +142,18 @@ export function usePlayback(
   function markError() {
     if (!selectedItem.value) return
     status.value = 'error'
-    error.value = 'This video could not be played directly in the current browser.'
+    error.value = 'This video could not be played in the current browser.'
   }
 
   function clear() {
+    cleanupJob()
     selectedItem.value = null
     status.value = 'idle'
     error.value = null
     audioSelectionError.value = null
     subtitleSelectionError.value = null
+    preparedStreamUrl.value = null
+    playbackProgress.value = null
   }
 
   async function selectAudioTrack(trackId: string) {
@@ -151,6 +171,7 @@ export function usePlayback(
     try {
       await saveAudioSelection(item.id, trackId)
       item.selectedAudioTrackId = trackId
+      if (enableFallback.value) play(item)
     } catch (reason) {
       audioSelectionError.value = reason instanceof Error ? reason.message : String(reason)
     } finally {
@@ -179,6 +200,7 @@ export function usePlayback(
       await saveSubtitleSelection(item.id, mode, trackId)
       item.subtitleMode = mode
       item.selectedSubtitleTrackId = trackId
+      if (enableFallback.value) play(item)
     } catch (reason) {
       subtitleSelectionError.value = reason instanceof Error ? reason.message : String(reason)
     } finally {
@@ -199,6 +221,7 @@ export function usePlayback(
     markError,
     markPlaying,
     play,
+    playbackProgress,
     selectAudioTrack,
     selectSubtitle,
     selectedAudioTrackId,
@@ -210,6 +233,73 @@ export function usePlayback(
     subtitleTrackUrl,
     status,
     streamUrl,
+  }
+
+  async function prepare(item: MediaItem) {
+    cleanupJob()
+    try {
+      const result = await invoke<PlaybackPreparation>('prepare_playback', {
+        mediaId: item.id,
+        capabilities: browserCapabilities(),
+      })
+      if (result.method === 'direct_play') return
+      if (!result.jobId || !result.outputName || !server.value)
+        throw new Error('Invalid playback job')
+      activeJobId.value = result.jobId
+      while (activeJobId.value === result.jobId) {
+        const job = await invoke<PlaybackJob>('playback_job', { jobId: result.jobId })
+        playbackProgress.value = job.progressPermille
+        if (job.state === 'completed') {
+          const baseUrl = server.value.baseUrl.replace(/\/$/, '')
+          preparedStreamUrl.value = `${baseUrl}/api/v1/playback/jobs/${encodeURIComponent(result.jobId)}/output/${encodeURIComponent(result.outputName)}`
+          return
+        }
+        if (job.state === 'failed' || job.state === 'cancelled')
+          throw new Error('Playback conversion failed')
+        await new Promise((resolve) => window.setTimeout(resolve, 100))
+      }
+    } catch (reason) {
+      if (!selectedItem.value) return
+      status.value = 'error'
+      error.value = reason instanceof Error ? reason.message : 'Playback preparation failed.'
+    }
+  }
+
+  function cleanupJob() {
+    const jobId = activeJobId.value
+    activeJobId.value = null
+    if (!jobId) return
+    void invoke('cancel_playback', { jobId }).finally(() => invoke('release_playback', { jobId }))
+  }
+}
+
+function browserCapabilities() {
+  const video = document.createElement('video')
+  const supports = (type: string) => video.canPlayType(type) !== ''
+  const containers: string[] = []
+  const videoCodecs: string[] = []
+  const audioCodecs: string[] = []
+  if (supports('video/mp4')) containers.push('mp4')
+  if (supports('video/webm')) containers.push('webm')
+  if (supports('video/mp4; codecs="avc1.42E01E"')) videoCodecs.push('h264')
+  if (supports('video/mp4; codecs="hvc1"')) videoCodecs.push('hevc')
+  if (supports('video/webm; codecs="vp8"')) videoCodecs.push('vp8')
+  if (supports('video/webm; codecs="vp9"')) videoCodecs.push('vp9')
+  if (supports('video/mp4; codecs="mp4a.40.2"')) audioCodecs.push('aac')
+  if (supports('video/webm; codecs="opus"')) audioCodecs.push('opus')
+  if (supports('video/webm; codecs="vorbis"')) audioCodecs.push('vorbis')
+  return {
+    containers,
+    videoCodecs,
+    audioCodecs,
+    embeddedTextSubtitleCodecs: [],
+    externalWebvtt: true,
+    embeddedAudioSelection: false,
+    bitmapSubtitles: false,
+    remuxTargets: [
+      { container: 'mp4', videoCodecs: ['h264', 'hevc'], audioCodecs: ['aac'] },
+      { container: 'webm', videoCodecs: ['vp8', 'vp9', 'av1'], audioCodecs: ['opus', 'vorbis'] },
+    ],
   }
 }
 

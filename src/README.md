@@ -33,4 +33,4 @@ The current library is persisted locally in SQLite. Native mode retains Tauri ad
 
 ## Planned Work
 
-Add pairing/authentication or compatibility-aware playback only in separately scoped tasks.
+Add discovery and other new domains only in separately scoped tasks; compatibility-aware desktop playback is implemented.

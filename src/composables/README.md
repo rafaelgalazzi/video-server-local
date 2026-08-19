@@ -10,7 +10,7 @@ Own reusable Vue-native state and coordinate typed backend adapters without intr
 - `useMediaLibrary`: restores persisted library state and coordinates approved-folder selection and safe scan results.
 - `useServerStatus`: loads the embedded HTTP server's safe address and exposure state.
 - `useNodeIdentity`: loads the trusted-local public identity and coordinates root export and confirmation-based reset.
-- `usePlayback`: owns selected media, opaque-ID media/WebVTT URLs, playback state, accessible audio/subtitle choices, and native preference persistence.
+- `usePlayback`: owns selected media, explicit browser capabilities, Direct Play/fallback preparation, opaque media/WebVTT/job URLs, progress/error/cancel state, accessible track choices, and native preference persistence.
 - `usePairingRequests`: polls trusted-local pending requests and coordinates approve/reject decisions.
 - `useTrustedPeers`: loads safe peer summaries and owns confirmation-based revocation state.
 - `useRuntimeBootstrap`: selects native Tauri or same-origin browser transport and exposes explicit connection states.
@@ -26,8 +26,8 @@ Own reusable Vue-native state and coordinate typed backend adapters without intr
 - `useServerStatus.ts`: server status state and typed response contract.
 - `useServerStatus.test.ts`: loopback success and failure tests.
 - `useNodeIdentity.ts` and its test: safe node-summary loading and failure containment.
-- `usePlayback.ts`: Direct Play selection, URL, and event state.
-- `usePlayback.test.ts`: URL safety, API availability, playback-event, and reset tests.
+- `usePlayback.ts`: Direct Play-first preparation, fallback polling/cleanup, URLs, and event state.
+- `usePlayback.test.ts` and `usePlaybackFallback.test.ts`: URL safety, selection, fallback completion, cancellation, and reset tests.
 - `usePairingRequests.ts`: pending request state, decision orchestration, and polling lifecycle.
 - `usePairingRequests.test.ts`: load, decision, failure retention, polling, and cleanup tests.
 - `useTrustedPeers.ts`: active-peer load, confirmation, cancellation, and revocation orchestration.

@@ -22,6 +22,10 @@ Subtitle preference mutation follows the same trusted-local rule. Automatic mode
 
   Converts one validated embedded text subtitle to `text/vtt` using structured FFmpeg arguments, a 15-second timeout, a 2 MiB output bound, approved-library containment checks, and a two-job concurrency limit. Protected routers require library-read authentication. Bitmap subtitles return `415 subtitle_transform_required`; unknown formats return `415 subtitle_format_unsupported`; missing IDs return `404`. Responses are private and `no-store`.
 
+- `GET /api/v1/playback/jobs/{jobId}/output/{name}`
+
+  The trusted-local playback-enabled server Range-streams a completed bounded remux/transcode output by opaque job ID and fixed output name. Unknown, incomplete, released, malformed, or unavailable outputs fail without exposing temporary paths. Job preparation, status, cancellation, and release remain trusted-local Tauri commands; future remote adapters must apply the existing HTTPS session and unsafe-method CSRF rules.
+
 Errors use:
 
 ```json

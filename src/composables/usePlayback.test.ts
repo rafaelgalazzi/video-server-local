@@ -53,7 +53,7 @@ describe('usePlayback', () => {
 
     subject.markError()
     expect(subject.status.value).toBe('error')
-    expect(subject.error.value).toContain('could not be played directly')
+    expect(subject.error.value).toContain('could not be played')
   })
 
   it('clears stale playback state', () => {

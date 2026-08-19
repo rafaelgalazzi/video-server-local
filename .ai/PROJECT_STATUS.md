@@ -6,7 +6,7 @@
 
 ## Current Milestone
 
-Phase A.1: MKV track support and browser compatibility before discovery.
+Phase B: Discovery and native pairing.
 
 ## Working
 
@@ -59,15 +59,17 @@ Phase A.1: MKV track support and browser compatibility before discovery.
 - A transport-neutral compatibility engine accepts explicit client capabilities and selects Direct Play, remux, transcode, or unavailable with effective tracks, subtitle delivery, target container, and stable reason codes.
 - A reusable media job manager bounds transform concurrency and queued admission, deduplicates active keys, propagates cancellation to child processes, reserves temporary quota, cleans failed/stale output, and exposes path-free progress snapshots.
 - MP4/WebM remux fallback canonicalizes approved sources, resolves opaque selections to private indices, stream-copies exactly selected compatible tracks through bounded jobs, and exposes completed files without paths.
+- Software-only MP4/WebM transcode fallback handles selected audio, text subtitle conversion, and text/bitmap burn-in through bounded jobs without hardware acceleration.
+- Local desktop playback collects explicit browser capabilities, preserves Direct Play precedence, prepares remux/transcode jobs with progress and safe failure states, supports cancel/retry/cleanup, and Range-streams opaque completed output.
 
 ## In Progress
 
-- LS-048 transcode fallback is the next dependency in Phase A.1.
+- LS-032 discovery protocol ADR and service contract begins Phase B.
 
 ## Not Started
 
 - Node discovery, pairing, trust, and distributed libraries.
-- FFmpeg transcoding execution and remux playback integration.
+- Node discovery advertisement and bounded registry implementation.
 - Automated tests, CI, packaging, and platform verification.
 
 ## Known Major Limitations
@@ -78,7 +80,7 @@ Phase A.1: MKV track support and browser compatibility before discovery.
 - Rescans replace the full stored snapshot rather than updating incrementally.
 - HTTP and Direct Play are loopback-only on an ephemeral port until pairing/authentication is implemented.
 - Direct Play supports one byte range per request; multipart ranges and conditional caching are not implemented.
-- Compatibility decisions, bounded transform jobs, and remux execution are implemented; transcoding and local fallback integration are not.
+- Physical browser/device playback of fallback output is not yet verified outside automated local fixtures.
 - Pairing requests are intentionally memory-only and disappear on restart.
 - Native client secret storage is not implemented.
 - Physical second-device certificate installation, browser onboarding, and playback are not verified.
@@ -88,6 +90,6 @@ Phase A.1: MKV track support and browser compatibility before discovery.
 
 ## Next Major Goal
 
-Start LS-048 transcode fallback, then complete local fallback integration in LS-049 before Phase B.
+Start LS-032 discovery protocol ADR and service contract.
 
 The dependency-ordered remaining backlog is maintained in [IMPLEMENTATION_ROADMAP.md](IMPLEMENTATION_ROADMAP.md). The committed completion target is the release-ready desktop LAN MVP through LS-060; post-MVP work is gated and must not silently resolve deferred architecture decisions.

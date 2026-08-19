@@ -67,6 +67,46 @@ fn select_subtitle(
 }
 
 #[tauri::command]
+async fn prepare_playback(
+    core: tauri::State<'_, Arc<LocalStreamCore>>,
+    playback: tauri::State<'_, localstream_core::playback::LocalPlaybackService>,
+    media_id: String,
+    capabilities: localstream_core::compatibility::ClientCapabilities,
+) -> Result<localstream_core::playback::PlaybackPreparation, String> {
+    playback
+        .prepare(&core, &media_id, &capabilities)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn playback_job(
+    playback: tauri::State<'_, localstream_core::playback::LocalPlaybackService>,
+    job_id: localstream_core::media_jobs::MediaJobId,
+) -> Result<localstream_core::media_jobs::MediaJobSnapshot, String> {
+    playback
+        .snapshot(job_id)
+        .ok_or_else(|| "the playback job does not exist".to_owned())
+}
+
+#[tauri::command]
+fn cancel_playback(
+    playback: tauri::State<'_, localstream_core::playback::LocalPlaybackService>,
+    job_id: localstream_core::media_jobs::MediaJobId,
+) -> bool {
+    playback.cancel(job_id)
+}
+
+#[tauri::command]
+async fn release_playback(
+    playback: tauri::State<'_, localstream_core::playback::LocalPlaybackService>,
+    job_id: localstream_core::media_jobs::MediaJobId,
+) -> Result<bool, String> {
+    let playback = playback.inner().clone();
+    Ok(playback.cancel_and_release(job_id).await)
+}
+
+#[tauri::command]
 fn server_info(
     server: tauri::State<'_, localstream_core::server::ServerHandle>,
 ) -> localstream_core::server::ServerInfo {
@@ -273,10 +313,25 @@ pub fn run() {
                 }
             }
             let identity_store = identity_service.into_store();
+            let playback = tauri::async_runtime::block_on(
+                localstream_core::playback::LocalPlaybackService::start(
+                    localstream_core::media_jobs::MediaJobConfig {
+                        work_root: app_data.join("media-cache"),
+                        max_concurrent: 2,
+                        max_queued: 8,
+                        temporary_byte_quota: 8 * 1024 * 1024 * 1024,
+                    },
+                ),
+            )
+            .map_err(std::io::Error::other)?;
             let server = tauri::async_runtime::block_on(
-                localstream_core::server::start_local_server(Arc::clone(&core)),
+                localstream_core::server::start_local_server_with_playback(
+                    Arc::clone(&core),
+                    playback.clone(),
+                ),
             )?;
             app.manage(core);
+            app.manage(playback);
             app.manage(identity_summary);
             app.manage(identity_store);
             app.manage(server);
@@ -291,12 +346,16 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             app_info,
             approve_pairing,
+            cancel_playback,
             current_library,
             export_node_root_certificate,
             node_identity,
             pending_pairings,
+            playback_job,
+            prepare_playback,
             reject_pairing,
             reset_node_identity,
+            release_playback,
             revoke_trusted_peer,
             server_info,
             lan_server_config,

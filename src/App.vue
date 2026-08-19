@@ -37,7 +37,7 @@ const activeItemCountLabel = computed(() => {
   const count = activeLibrary.value?.items.length ?? 0
   return `${count} ${count === 1 ? 'video' : 'videos'}`
 })
-const playback = usePlayback(activeServer, runtime.isNative)
+const playback = usePlayback(activeServer, runtime.isNative, undefined, undefined, runtime.isNative)
 
 watch(
   () => mediaLibrary.library.value?.items,
@@ -119,6 +119,7 @@ onUnmounted(() => {
         :error="playback.error.value"
         :item="playback.selectedItem.value"
         :status="playback.status.value"
+        :progress="playback.playbackProgress.value"
         :stream-url="playback.streamUrl.value"
         :audio-options="playback.audioOptions.value"
         :audio-selection-error="playback.audioSelectionError.value"

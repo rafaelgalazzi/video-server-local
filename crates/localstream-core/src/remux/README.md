@@ -27,4 +27,4 @@ Consumes compatibility decisions, private database mappings, `media_tools::Proce
 
 ## Limitations and Planned Work
 
-MP4 and WebM are the initial output containers. Subtitle conversion and codec transcoding belong to LS-048. LS-049 will stream completed output through local playback adapters.
+MP4 and WebM are the initial output containers. Incompatible subtitles and codecs are handled by `transcode/`; `playback/` coordinates and streams completed output.

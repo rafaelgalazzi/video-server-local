@@ -20,6 +20,8 @@ The crate exposes application identity information, scans explicitly approved vi
 - `src/media_tools/`: safe FFmpeg/ffprobe discovery and bounded process execution.
 - `src/media_jobs/`: bounded transform admission, lifecycle, quota, and temporary storage.
 - `src/remux/`: selected-track FFmpeg stream-copy fallback into browser containers.
+- `src/transcode/`: software-only browser fallback encoding and subtitle delivery.
+- `src/playback/`: Direct Play-first preparation and fallback lifecycle coordination.
 - `src/compatibility/`: Direct Play-first capability and fallback decisions.
 
 ## Public Interfaces
@@ -41,7 +43,7 @@ Axum and Tokio for the embedded server, bundled SQLite through rusqlite, Serde f
 
 ## Current Limitations
 
-Transcoding, remux playback integration, discovery, and headless protected storage are not implemented. Direct Play supports single byte ranges and eight concurrent streams. Completed transform reservations require explicit release, rescans replace a complete library snapshot, and release packaging does not yet bundle FFmpeg tools.
+Discovery and headless protected storage are not implemented. Direct Play and completed fallbacks support single byte ranges; completed transform reservations require explicit release. Rescans replace a complete library snapshot, and release packaging does not yet bundle FFmpeg tools.
 
 ## Planned Work
 

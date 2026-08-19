@@ -407,6 +407,18 @@ pub fn router(core: Arc<LocalStreamCore>) -> Router {
         .with_state(core)
 }
 
+pub fn router_with_playback(
+    core: Arc<LocalStreamCore>,
+    playback: crate::playback::LocalPlaybackService,
+) -> Router {
+    router(core)
+        .route(
+            "/api/v1/playback/jobs/{id}/output/{name}",
+            get(stream_playback_output),
+        )
+        .layer(Extension(playback))
+}
+
 pub fn authenticated_router(core: Arc<LocalStreamCore>) -> Router {
     let protected_routes = Router::new()
         .route("/api/v1/library", get(current_library))
@@ -882,6 +894,27 @@ pub async fn start_local_server(core: Arc<LocalStreamCore>) -> std::io::Result<S
     })
 }
 
+pub async fn start_local_server_with_playback(
+    core: Arc<LocalStreamCore>,
+    playback: crate::playback::LocalPlaybackService,
+) -> std::io::Result<ServerHandle> {
+    let listener = TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0)).await?;
+    let address = listener.local_addr()?;
+    let (shutdown, shutdown_receiver) = oneshot::channel();
+    let task = tokio::spawn(async move {
+        let _ = axum::serve(listener, router_with_playback(core, playback))
+            .with_graceful_shutdown(async move {
+                let _ = shutdown_receiver.await;
+            })
+            .await;
+    });
+    Ok(ServerHandle {
+        info: server_info(address),
+        shutdown: Some(shutdown),
+        task,
+    })
+}
+
 pub async fn start_loopback_https_server(
     core: Arc<LocalStreamCore>,
     identity: &NodeIdentity,
@@ -1201,6 +1234,77 @@ async fn stream_media(
         response_headers.insert(
             header::CONTENT_RANGE,
             HeaderValue::from_str(&format!("bytes {start}-{end}/{}", source.size))
+                .map_err(|_| ApiError::internal())?,
+        );
+    }
+    Ok(response)
+}
+
+async fn stream_playback_output(
+    Extension(playback): Extension<crate::playback::LocalPlaybackService>,
+    Path((job_id, name)): Path<(crate::media_jobs::MediaJobId, String)>,
+    headers: HeaderMap,
+) -> Result<Response, ApiError> {
+    let mut output = playback
+        .open_output(job_id, &name)
+        .await
+        .map_err(|error| match error {
+            crate::media_jobs::MediaJobOutputError::UnknownJob
+            | crate::media_jobs::MediaJobOutputError::NotReady => ApiError::media_not_found(),
+            crate::media_jobs::MediaJobOutputError::InvalidName
+            | crate::media_jobs::MediaJobOutputError::Unavailable => ApiError::internal(),
+        })?;
+    let requested_range = headers
+        .get(header::RANGE)
+        .map(|value| {
+            value
+                .to_str()
+                .map_err(|_| ApiError::range_not_satisfiable(output.size_bytes))
+        })
+        .transpose()?
+        .map(|value| {
+            parse_single_range(value, output.size_bytes)
+                .map_err(|_| ApiError::range_not_satisfiable(output.size_bytes))
+        })
+        .transpose()?;
+    let (status, start, end) = requested_range.map_or(
+        (StatusCode::OK, 0, output.size_bytes.saturating_sub(1)),
+        |range| (StatusCode::PARTIAL_CONTENT, range.start, range.end),
+    );
+    let length = if output.size_bytes == 0 {
+        0
+    } else {
+        end - start + 1
+    };
+    output
+        .file
+        .seek(std::io::SeekFrom::Start(start))
+        .await
+        .map_err(|_| ApiError::internal())?;
+    let stream = ReaderStream::new(output.file.take(length));
+    let mut response = Response::new(Body::from_stream(stream));
+    *response.status_mut() = status;
+    let content_type = if name.ends_with(".mp4") {
+        "video/mp4"
+    } else if name.ends_with(".webm") {
+        "video/webm"
+    } else {
+        return Err(ApiError::internal());
+    };
+    response
+        .headers_mut()
+        .insert(header::ACCEPT_RANGES, HeaderValue::from_static("bytes"));
+    response
+        .headers_mut()
+        .insert(header::CONTENT_TYPE, HeaderValue::from_static(content_type));
+    response.headers_mut().insert(
+        header::CONTENT_LENGTH,
+        HeaderValue::from_str(&length.to_string()).map_err(|_| ApiError::internal())?,
+    );
+    if status == StatusCode::PARTIAL_CONTENT {
+        response.headers_mut().insert(
+            header::CONTENT_RANGE,
+            HeaderValue::from_str(&format!("bytes {start}-{end}/{}", output.size_bytes))
                 .map_err(|_| ApiError::internal())?,
         );
     }
@@ -2492,6 +2596,60 @@ mod tests {
             .expect("body should stream")
             .to_bytes();
         assert_eq!(&body[..], b"2345");
+    }
+
+    #[tokio::test]
+    async fn completed_playback_output_honors_ranges_without_exposing_paths() {
+        let directory = tempfile::tempdir().expect("temporary directory should exist");
+        let playback =
+            crate::playback::LocalPlaybackService::start(crate::media_jobs::MediaJobConfig {
+                work_root: directory.path().join("jobs"),
+                max_concurrent: 1,
+                max_queued: 1,
+                temporary_byte_quota: 32,
+            })
+            .await
+            .expect("playback service should start");
+        let submission = playback
+            .test_jobs()
+            .submit(
+                crate::media_jobs::MediaJobKey::new("server-output").unwrap(),
+                16,
+                |context| async move {
+                    tokio::fs::write(context.directory().join("output.mp4"), b"0123456789")
+                        .await
+                        .map_err(|_| crate::media_jobs::JobFailure)?;
+                    Ok(())
+                },
+            )
+            .unwrap();
+        tokio::time::timeout(Duration::from_secs(2), async {
+            while playback.snapshot(submission.id).unwrap().state
+                != crate::media_jobs::MediaJobState::Completed
+            {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        let core = Arc::new(LocalStreamCore::in_memory().unwrap());
+        let response = super::router_with_playback(core, playback)
+            .oneshot(
+                Request::builder()
+                    .uri(format!(
+                        "/api/v1/playback/jobs/{}/output/output.mp4",
+                        submission.id
+                    ))
+                    .header("range", "bytes=3-6")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::PARTIAL_CONTENT);
+        assert_eq!(response.headers()["content-range"], "bytes 3-6/10");
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        assert_eq!(&body[..], b"3456");
     }
 
     #[tokio::test]

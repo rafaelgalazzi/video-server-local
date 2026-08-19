@@ -28,8 +28,8 @@ Uses normalized models from `media/` only. It does not access files, SQLite, HTT
 
 ## Limitations
 
-Capability discovery and user-agent mapping are intentionally absent pending target-device evidence under DD-001. Remux decisions can execute through the bounded job manager; transcoding is not implemented.
+User-agent mapping is intentionally absent pending target-device evidence under DD-001. Desktop playback supplies explicit runtime capability probes; remux and transcode decisions execute through the bounded job manager.
 
 ## Planned Work
 
-LS-048 will consume transcode decisions through the LS-046 bounded job manager; LS-049 will integrate both fallbacks into playback.
+Future native and remote clients must reuse this decision engine and provide explicit capabilities.

@@ -18,7 +18,7 @@ The shell creates the main window, initializes the database-backed core and prot
 
 ## Public Interfaces
 
-Tauri commands `app_info`, `server_info`, and `node_identity` return safe runtime metadata. `current_library` loads the safe persisted view; `select_audio_track` and `select_subtitle` delegate validated preference persistence to the core. Commands must remain thin adapters.
+Tauri commands `app_info`, `server_info`, and `node_identity` return safe runtime metadata. `current_library` loads the safe persisted view; track commands delegate validated preferences. `prepare_playback`, `playback_job`, `cancel_playback`, and `release_playback` are thin adapters to the reusable local playback coordinator.
 
 ## Dependencies
 

@@ -34,7 +34,7 @@ Discover media inside directories explicitly approved by the user while keeping 
 
 ## Current Limitations
 
-The standalone synchronous scanner identifies candidates only; the core's async persisted scan adds ffprobe metadata. Compatibility decisions, track preferences, incremental scanning, remuxing, and transcoding are not implemented.
+The standalone synchronous scanner identifies candidates only; the core's async persisted scan adds ffprobe metadata. Incremental scanning is not implemented; compatibility, preferences, remux, and transcode live in separate core modules.
 
 ## Planned Work
 

@@ -10,9 +10,11 @@ pub mod media_jobs;
 pub mod media_tools;
 pub mod native_client;
 pub mod node_identity;
+pub mod playback;
 pub mod remux;
 pub mod server;
 pub mod streaming;
+pub mod transcode;
 
 pub use database::DatabaseError;
 pub use media::{LibraryScan, LibraryScanError};
@@ -302,6 +304,100 @@ impl LocalStreamCore {
                 audio_index,
                 subtitle_index,
                 subtitle_codec,
+            },
+            decision,
+            ffmpeg,
+        )
+        .await
+    }
+
+    pub async fn submit_transcode(
+        &self,
+        jobs: &media_jobs::MediaJobManager,
+        media_id: &str,
+        decision: &compatibility::PlaybackDecision,
+    ) -> Result<transcode::TranscodeSubmission, transcode::TranscodeError> {
+        let library = self
+            .database
+            .current_library()
+            .map_err(|_| transcode::TranscodeError::Unavailable)?
+            .ok_or(transcode::TranscodeError::UnknownMedia)?;
+        let item = library
+            .items
+            .iter()
+            .find(|item| item.id == media_id)
+            .ok_or(transcode::TranscodeError::UnknownMedia)?;
+        let metadata = item
+            .metadata
+            .as_ref()
+            .ok_or(transcode::TranscodeError::UnsupportedInput)?;
+        let video = metadata
+            .video
+            .as_ref()
+            .ok_or(transcode::TranscodeError::UnsupportedInput)?;
+        let location = self
+            .database
+            .media_location(media_id)
+            .map_err(|_| transcode::TranscodeError::Unavailable)?
+            .ok_or(transcode::TranscodeError::UnknownMedia)?;
+        let video_index = self
+            .database
+            .track_source_index(media_id, &video.id, "video")
+            .map_err(|_| transcode::TranscodeError::Unavailable)?
+            .ok_or(transcode::TranscodeError::UnsupportedInput)?;
+        let audio_index = decision
+            .selected_audio_track_id
+            .as_deref()
+            .map(|id| {
+                self.database
+                    .track_source_index(media_id, id, "audio")
+                    .map_err(|_| transcode::TranscodeError::Unavailable)?
+                    .ok_or(transcode::TranscodeError::InvalidTrack)
+            })
+            .transpose()?;
+        let subtitle = if matches!(
+            decision.subtitle_delivery,
+            compatibility::SubtitleDelivery::Embedded | compatibility::SubtitleDelivery::BurnIn
+        ) {
+            decision
+                .selected_subtitle_track_id
+                .as_deref()
+                .map(|id| {
+                    let track = metadata
+                        .subtitle_tracks
+                        .iter()
+                        .enumerate()
+                        .find(|(_, track)| track.id == id)
+                        .ok_or(transcode::TranscodeError::InvalidTrack)?;
+                    let source_index = self
+                        .database
+                        .track_source_index(media_id, id, "subtitle")
+                        .map_err(|_| transcode::TranscodeError::Unavailable)?
+                        .ok_or(transcode::TranscodeError::InvalidTrack)?;
+                    Ok::<_, transcode::TranscodeError>(transcode::TranscodeSubtitle {
+                        source_index,
+                        subtitle_ordinal: u32::try_from(track.0)
+                            .map_err(|_| transcode::TranscodeError::InvalidTrack)?,
+                        kind: track.1.kind,
+                    })
+                })
+                .transpose()?
+        } else {
+            None
+        };
+        let ffmpeg = media_tools::MediaToolPaths::discover_ffmpeg()
+            .await
+            .map_err(|_| transcode::TranscodeError::Unavailable)?;
+        transcode::submit(
+            jobs,
+            transcode::TranscodeSource {
+                media_id: media_id.to_owned(),
+                approved_root: location.root_path,
+                media_path: location.media_path,
+                source_size_bytes: item.size_bytes,
+                video_index,
+                audio_index,
+                subtitle,
             },
             decision,
             ffmpeg,

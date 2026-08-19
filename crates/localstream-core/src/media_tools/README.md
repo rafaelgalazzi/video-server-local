@@ -32,4 +32,4 @@ Release packaging does not yet bundle FFmpeg. Operators must install compatible 
 
 ## Planned Work
 
-`media_jobs/` owns transform queues, quotas, deduplication, cancellation, and stale-job cleanup. LS-047 and LS-048 will build concrete FFmpeg transforms on both boundaries.
+`media_jobs/` owns transform queues, quotas, deduplication, cancellation, and stale-job cleanup. Remux and transcode modules build concrete structured FFmpeg work on both boundaries.

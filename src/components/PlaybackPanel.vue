@@ -8,6 +8,7 @@ defineProps<{
   error: string | null
   item: MediaItem
   status: PlaybackStatus
+  progress: number | null
   streamUrl: string
   audioOptions: AudioOption[]
   audioSelectionError: string | null
@@ -43,7 +44,7 @@ defineEmits<{
     </div>
 
     <p v-if="status === 'loading'" class="playback-panel__status" role="status">
-      Preparing direct playbackâ€¦
+      Preparing playback<span v-if="progress !== null"> ({{ Math.floor(progress / 10) }}%)</span>â€¦
     </p>
     <p v-if="error" class="feedback feedback--error" role="alert">{{ error }}</p>
 
