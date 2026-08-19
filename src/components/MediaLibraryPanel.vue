@@ -79,10 +79,10 @@ function formatSize(bytes: number) {
             class="library-action library-action--primary"
             type="button"
             :disabled="!canPlay"
-            :title="canPlay ? `Play preview of ${item.title}` : 'Playback API unavailable'"
+            :title="canPlay ? `Play ${item.title}` : 'Playback API unavailable'"
             @click="$emit('play', item)"
           >
-            Play preview
+            Play
           </button>
         </div>
       </article>

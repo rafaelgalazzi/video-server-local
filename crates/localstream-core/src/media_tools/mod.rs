@@ -217,6 +217,12 @@ impl ProcessRunner {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .kill_on_drop(true);
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+            command.as_std_mut().creation_flags(CREATE_NO_WINDOW);
+        }
         let mut child = command.spawn().map_err(ProcessError::Spawn)?;
         let stdout = child.stdout.take().expect("piped stdout must exist");
         let stderr = child.stderr.take().expect("piped stderr must exist");

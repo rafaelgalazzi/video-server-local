@@ -150,7 +150,7 @@ function destroyHls() {
       class="playback-panel__start"
       @click="$emit('start')"
     >
-      Play preview
+      Play
     </button>
 
     <div v-if="audioOptions.length > 1" class="playback-panel__track-control">

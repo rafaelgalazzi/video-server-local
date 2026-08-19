@@ -274,7 +274,7 @@ export function usePlayback(
     preparedStreamUrl.value = null
     preparationResolved.value = false
     playbackProgress.value = null
-    preparationNotice.value = 'Configuration saved. Press Play preview when you are ready.'
+    preparationNotice.value = 'Configuration saved. Press Play when you are ready.'
   }
 
   async function prepare(item: MediaItem) {
