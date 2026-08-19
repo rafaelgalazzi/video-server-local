@@ -18,6 +18,7 @@ The crate exposes application identity information, scans explicitly approved vi
 - `src/auth/`: secure peer credentials and bounded user-approved pairing lifecycle.
 - `src/node_identity/`: persistent private-CA identity and protected secret-store boundary.
 - `src/media_tools/`: safe FFmpeg/ffprobe discovery and bounded process execution.
+- `src/media_jobs/`: bounded transform admission, lifecycle, quota, and temporary storage.
 - `src/compatibility/`: Direct Play-first capability and fallback decisions.
 
 ## Public Interfaces
@@ -39,7 +40,7 @@ Axum and Tokio for the embedded server, bundled SQLite through rusqlite, Serde f
 
 ## Current Limitations
 
-Compatibility decisions, track preferences, remux/transcode fallback, discovery, and headless protected storage are not implemented. Direct Play supports single byte ranges and eight concurrent streams. Rescans replace a complete library snapshot, and release packaging does not yet bundle FFmpeg tools.
+Remux/transcode implementations, discovery, and headless protected storage are not implemented. Direct Play supports single byte ranges and eight concurrent streams. Completed transform reservations require explicit release, rescans replace a complete library snapshot, and release packaging does not yet bundle FFmpeg tools.
 
 ## Planned Work
 

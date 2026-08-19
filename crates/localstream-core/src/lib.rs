@@ -6,6 +6,7 @@ pub mod compatibility;
 mod database;
 pub mod lan;
 pub mod media;
+pub mod media_jobs;
 pub mod media_tools;
 pub mod native_client;
 pub mod node_identity;
