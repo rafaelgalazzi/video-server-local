@@ -29,8 +29,8 @@ Tokio provides asynchronous filesystem I/O. Persisted location records remain pr
 
 ## Limitations
 
-Only single byte ranges are supported. Compatibility probing, multipart ranges, conditional requests, transcoding, concurrency limits, and authenticated LAN delivery are not implemented.
+Only single byte ranges are supported. Compatibility decisions live in `compatibility/`; multipart ranges, conditional requests, and transform execution are not implemented here.
 
 ## Planned Work
 
-Add client compatibility negotiation before introducing FFmpeg-based fallback.
+LS-047 and LS-048 will execute the compatibility engine's remux/transcode decisions.

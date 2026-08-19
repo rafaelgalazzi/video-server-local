@@ -2,11 +2,11 @@
 
 ## ID
 
-LS-045
+LS-046
 
 ## Title
 
-Direct Play compatibility decisions
+Bounded media job manager
 
 ## Status
 
@@ -14,28 +14,27 @@ Not Started
 
 ## Goal
 
-Select Direct Play first, then remux, then transcode from normalized media metadata, selected tracks, subtitle delivery requirements, and explicit browser capabilities.
+Own transform concurrency, bounded queues, deduplication, cancellation, child cleanup, temporary quotas, stale cleanup, and safe progress models.
 
 ## Completed
 
 - Phase A through LS-031.
-- LS-043 safe FFmpeg/ffprobe discovery and process boundary.
-- LS-044 normalized metadata probing and schema-v4 persistence.
-- LS-069 schema-v5 audio preferences and private source-index resolution.
-- LS-070 schema-v6 Automatic/Off/track subtitle preferences, accessible controls, bounded WebVTT text extraction, and explicit bitmap-transform errors.
+- LS-043 bounded FFmpeg process boundary.
+- LS-044 normalized metadata probing.
+- LS-069 and LS-070 persisted track preferences and subtitle delivery semantics.
+- LS-045 explicit client-capability decision engine with Direct Play → remux → transcode precedence and stable reason codes.
 
 ## Verification
 
-- Core tests cover subtitle Off/Automatic/track modes, invalid IDs, restart retention, changed-track reset, and bitmap rejection.
-- A generated MKV fixture verifies embedded text conversion to WebVTT through bounded structured FFmpeg execution.
-- Vue tests cover forced-before-default behavior, labels, Off, bitmap notices, invalid IDs, and safe remote-mode behavior.
+- Decision-table tests cover conservative Chromium-like, Firefox-like, and Safari-like capability inputs.
+- Cases cover MP4/WebM Direct Play, MKV remux, selected second audio, unsupported video/audio, external/embedded text subtitles, bitmap burn-in, unknown formats, missing metadata/video, and stale selections.
 
 ## Remaining
 
-- Define representative browser capability profiles.
-- Implement explainable Direct Play/remux/transcode decision rules.
-- Cover dual-audio, text/bitmap subtitle, container, and codec combinations with decision-table tests.
+- Define bounded job identifiers, states, progress, queue admission, and deduplication keys.
+- Enforce transform concurrency, temporary-byte quotas, cancellation, process cleanup, and stale restart cleanup.
+- Add saturation, cancellation, crash/quota, cleanup, and no-orphan-process tests.
 
 ## Next Exact Step
 
-Implement LS-045 transport-neutral browser capability and playback-decision models in the Rust core.
+Implement LS-046's reusable media job manager around the LS-043 process boundary.

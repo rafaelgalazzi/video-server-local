@@ -6,7 +6,7 @@ Contains reusable Rust domain code with no dependency on Tauri or HTTP transport
 
 ## Features and Interfaces
 
-`lib.rs` defines the core facade. `media/` owns scanning, `media_tools/` owns bounded FFmpeg process execution, `database/` persistence, `streaming/` Direct Play, `auth/` server credentials, `node_identity/` private PKI, `native_client/` protected peer pins, `lan/` endpoint/TLS activation policy, and `server/` Axum adapters and lifecycle.
+`lib.rs` defines the core facade. `media/` owns scanning, `media_tools/` owns bounded FFmpeg process execution, `compatibility/` owns Direct Play-first decisions, `database/` persistence, `streaming/` Direct Play, `auth/` server credentials, `node_identity/` private PKI, `native_client/` protected peer pins, `lan/` endpoint/TLS activation policy, and `server/` Axum adapters and lifecycle.
 
 ## Dependencies
 

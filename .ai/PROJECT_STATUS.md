@@ -56,10 +56,11 @@ Phase A.1: MKV track support and browser compatibility before discovery.
 - Async persisted scans probe normalized container, duration, video, complete audio, and text/bitmap subtitle metadata; corrupt items fail individually, opaque track mappings remain private, and schema-v4 metadata survives restart.
 - Schema-v5 audio preferences validate opaque tracks against the current item, resolve private source indices, survive restart/unchanged rescans, reset when tracks change, and have accessible desktop playback controls.
 - Schema-v6 subtitle preferences support Automatic/Off/validated-track modes, forced-before-default selection, restart/rescan safety, accessible controls, bounded WebVTT text extraction, and explicit bitmap-transform errors.
+- A transport-neutral compatibility engine accepts explicit client capabilities and selects Direct Play, remux, transcode, or unavailable with effective tracks, subtitle delivery, target container, and stable reason codes.
 
 ## In Progress
 
-- LS-045 Direct Play compatibility decisions are the next dependency in Phase A.1.
+- LS-046 bounded media job manager is the next dependency in Phase A.1.
 
 ## Not Started
 
@@ -75,7 +76,7 @@ Phase A.1: MKV track support and browser compatibility before discovery.
 - Rescans replace the full stored snapshot rather than updating incrementally.
 - HTTP and Direct Play are loopback-only on an ephemeral port until pairing/authentication is implemented.
 - Direct Play supports one byte range per request; multipart ranges and conditional caching are not implemented.
-- Playback compatibility is still delegated to the embedded browser; compatibility decisions and transcoding fallback are not implemented.
+- Compatibility decisions are implemented; remux/transcode execution and local fallback integration are not.
 - Pairing requests are intentionally memory-only and disappear on restart.
 - Native client secret storage is not implemented.
 - Physical second-device certificate installation, browser onboarding, and playback are not verified.
@@ -85,6 +86,6 @@ Phase A.1: MKV track support and browser compatibility before discovery.
 
 ## Next Major Goal
 
-Start LS-045 Direct Play compatibility decisions. Complete bounded jobs and fallback tasks through LS-049 before Phase B.
+Start LS-046 bounded media job management. Complete remux/transcode fallback through LS-049 before Phase B.
 
 The dependency-ordered remaining backlog is maintained in [IMPLEMENTATION_ROADMAP.md](IMPLEMENTATION_ROADMAP.md). The committed completion target is the release-ready desktop LAN MVP through LS-060; post-MVP work is gated and must not silently resolve deferred architecture decisions.

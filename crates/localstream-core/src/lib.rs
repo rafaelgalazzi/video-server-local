@@ -2,6 +2,7 @@ use serde::Serialize;
 use thiserror::Error;
 
 pub mod auth;
+pub mod compatibility;
 mod database;
 pub mod lan;
 pub mod media;
@@ -196,6 +197,24 @@ impl LocalStreamCore {
 
     pub fn current_library(&self) -> Result<Option<LibraryScan>, DatabaseError> {
         self.database.current_library()
+    }
+
+    pub fn playback_decision(
+        &self,
+        media_id: &str,
+        client: &compatibility::ClientCapabilities,
+    ) -> Result<compatibility::PlaybackDecision, compatibility::CompatibilityError> {
+        let library = self
+            .database
+            .current_library()
+            .map_err(|_| compatibility::CompatibilityError::Unavailable)?
+            .ok_or(compatibility::CompatibilityError::UnknownMedia)?;
+        let item = library
+            .items
+            .iter()
+            .find(|item| item.id == media_id)
+            .ok_or(compatibility::CompatibilityError::UnknownMedia)?;
+        Ok(compatibility::decide_playback(item, client))
     }
 
     pub fn select_audio_track(
