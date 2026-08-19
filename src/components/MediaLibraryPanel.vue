@@ -13,6 +13,7 @@ defineProps<{
 }>()
 
 defineEmits<{
+  configure: [item: MediaItem]
   play: [item: MediaItem]
   select: []
 }>()
@@ -42,7 +43,7 @@ function formatSize(bytes: number) {
       </div>
       <button
         v-if="canSelect"
-        class="primary-action"
+        class="library-action library-action--primary"
         type="button"
         :disabled="isScanning || isRestoring"
         @click="$emit('select')"
@@ -64,15 +65,26 @@ function formatSize(bytes: number) {
           <h3>{{ item.title }}</h3>
           <p>{{ item.extension.toUpperCase() }} · {{ formatSize(item.sizeBytes) }}</p>
         </div>
-        <button
-          class="media-row__play"
-          type="button"
-          :disabled="!canPlay"
-          :title="canPlay ? `Play ${item.title}` : 'Playback API unavailable'"
-          @click="$emit('play', item)"
-        >
-          Play
-        </button>
+        <div class="media-row__actions">
+          <button
+            class="library-action"
+            type="button"
+            :disabled="!canPlay"
+            :title="canPlay ? `Configure preview for ${item.title}` : 'Playback API unavailable'"
+            @click="$emit('configure', item)"
+          >
+            Configure
+          </button>
+          <button
+            class="library-action library-action--primary"
+            type="button"
+            :disabled="!canPlay"
+            :title="canPlay ? `Play preview of ${item.title}` : 'Playback API unavailable'"
+            @click="$emit('play', item)"
+          >
+            Play preview
+          </button>
+        </div>
       </article>
     </div>
     <p v-else-if="library" class="empty-library">

@@ -26,6 +26,18 @@ Subtitle preference mutation follows the same trusted-local rule. Automatic mode
 
   The trusted-local playback-enabled server Range-streams a completed bounded remux/transcode output by opaque job ID and fixed output name. Unknown, incomplete, released, malformed, or unavailable outputs fail without exposing temporary paths. Job preparation, status, cancellation, and release remain trusted-local Tauri commands; future remote adapters must apply the existing HTTPS session and unsafe-method CSRF rules.
 
+- `POST /api/v1/playback/hls`
+
+  Starts bounded progressive HLS for `{ "mediaId": "..." }`. Authenticated browser calls require `library.read`, exact same-origin validation, and a matching CSRF cookie/header. The native seek range grows as segments become available.
+
+- `GET /api/v1/playback/hls/{jobId}/status`
+
+  Returns a path-free snapshot for a caller-owned HLS session. Fixed playlist and segment routes expose progressively available output without revealing cache paths.
+
+- `DELETE /api/v1/playback/hls/{jobId}`
+
+  Cancels and releases the caller-owned session and temporary output. Browser calls require the same origin and CSRF validation as creation.
+
 Errors use:
 
 ```json

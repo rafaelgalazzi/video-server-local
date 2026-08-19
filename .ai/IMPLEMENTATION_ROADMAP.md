@@ -261,6 +261,40 @@ Depends on: LS-049.
 
 Completion evidence: compatibility evidence and an accepted ADR. If HLS is selected, the task expands into separately numbered segmenting, manifest, cache/quota, authorization, cancellation, and cleanup tasks before implementation begins.
 
+Decision: HLS selected by ADR-0009 after physical-browser MKV audio/startup evidence.
+
+### LS-071 — Bounded progressive HLS core
+
+Generate short HLS segments through structured FFmpeg arguments with Direct Play precedence, video stream-copy plus AAC audio as the preferred low-CPU profile, explicit full-transcode classification, opaque sessions, bounded concurrency, and progressive manifest visibility.
+
+Depends on: LS-050, LS-046, LS-049.
+
+Completion evidence: real-FFmpeg tests prove early segment availability, selected audio, video-copy arguments, bounded admission, and cancellation.
+
+### LS-072 — HLS cache and session lifecycle
+
+Enforce per-session/global temporary quotas, safe fixed names, expiry, release, startup stale cleanup, and failure cleanup without exposing paths.
+
+Depends on: LS-071.
+
+Completion evidence: quota, traversal, expiry, cancellation, and restart-cleanup tests.
+
+### LS-073 — Authenticated browser HLS transport
+
+Add same-origin HTTPS session-authenticated preparation/cancellation/status routes with exact Origin, Fetch Metadata, and explicit CSRF validation plus safe authenticated playlist and segment reads.
+
+Depends on: LS-022, LS-023, LS-071, LS-072.
+
+Completion evidence: positive playback contract plus missing/duplicate/foreign CSRF, revoked session, traversal, cross-peer, and resource-bound negative tests.
+
+### LS-074 — Offline browser HLS integration
+
+Bundle the browser HLS client locally, collect explicit capabilities, select audio/subtitles, display low-CPU versus full-transcode cost, begin on early segments, and cancel/release sessions during switches or navigation.
+
+Depends on: LS-073.
+
+Completion evidence: frontend tests and physical-browser H.264 MKV playback with audible AAC output and measured startup time.
+
 ## Phase E — Release engineering and desktop MVP completion
 
 ### LS-051 — CI and supported toolchain policy

@@ -42,7 +42,16 @@ const activeItemCountLabel = computed(() => {
   const count = activeLibrary.value?.items.length ?? 0
   return `${count} ${count === 1 ? 'video' : 'videos'}`
 })
-const playback = usePlayback(activeServer, runtime.isNative, undefined, undefined, runtime.isNative)
+const playbackFallbackEnabled = computed(
+  () => runtime.isNative.value || runtime.state.value === 'authenticated',
+)
+const playback = usePlayback(
+  activeServer,
+  runtime.isNative,
+  undefined,
+  undefined,
+  playbackFallbackEnabled,
+)
 
 watch(
   () => mediaLibrary.library.value?.items,
@@ -154,16 +163,18 @@ onUnmounted(() => {
           :item-count-label="activeItemCountLabel"
           :library="activeLibrary"
           :notice="mediaLibrary.notice.value"
+          @configure="playback.select"
           @play="playback.play"
           @select="selectLibrary"
         />
 
         <PlaybackPanel
-          v-if="playback.selectedItem.value && playback.streamUrl.value"
+          v-if="playback.selectedItem.value"
           :error="playback.error.value"
           :item="playback.selectedItem.value"
           :status="playback.status.value"
           :progress="playback.playbackProgress.value"
+          :preparation-notice="playback.preparationNotice.value"
           :stream-url="playback.streamUrl.value"
           :audio-options="playback.audioOptions.value"
           :audio-selection-error="playback.audioSelectionError.value"
@@ -180,6 +191,7 @@ onUnmounted(() => {
           @close="playback.clear"
           @failed="playback.markError"
           @playing="playback.markPlaying"
+          @start="playback.start"
           @select-audio="playback.selectAudioTrack"
           @select-subtitle="playback.selectSubtitle"
         />

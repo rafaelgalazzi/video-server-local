@@ -4,7 +4,7 @@ Do not repeatedly reopen these decisions until the documented trigger is reached
 
 ## DD-001 — HLS strategy
 
-Status: Deferred
+Status: Resolved by ADR-0009
 
 Reason for deferral: The MVP must prove Direct Play and HTTP Range before adaptive streaming is designed.
 
@@ -13,7 +13,7 @@ Questions:
 - Which clients require HLS?
 - Should segments be generated on demand and cached?
 
-Do not decide before: Direct Play compatibility gaps are measured in a working MVP.
+Resolution: Physical browser evidence after LS-049 showed silent browser audio for an H.264 MKV and excessive startup delay from complete-file preparation. Progressive HLS is selected as a browser fallback with Direct Play precedence, video stream-copy plus audio-only AAC as the preferred low-CPU path, bounded local segment caching, and authenticated offline delivery.
 
 ## DD-002 — External metadata provider
 

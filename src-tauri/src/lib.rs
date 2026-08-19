@@ -86,6 +86,18 @@ async fn prepare_playback(
 }
 
 #[tauri::command]
+async fn prepare_hls(
+    core: tauri::State<'_, Arc<LocalStreamCore>>,
+    playback: tauri::State<'_, localstream_core::playback::LocalPlaybackService>,
+    media_id: String,
+) -> Result<localstream_core::hls::HlsSubmission, String> {
+    playback
+        .prepare_hls(&core, &media_id)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 fn playback_job(
     playback: tauri::State<'_, localstream_core::playback::LocalPlaybackService>,
     job_id: localstream_core::media_jobs::MediaJobId,
@@ -280,6 +292,17 @@ pub fn run() {
                 endpoint: None,
                 failure: None,
             };
+            let playback = tauri::async_runtime::block_on(
+                localstream_core::playback::LocalPlaybackService::start(
+                    localstream_core::media_jobs::MediaJobConfig {
+                        work_root: app_data.join("media-cache"),
+                        max_concurrent: 2,
+                        max_queued: 8,
+                        temporary_byte_quota: 8 * 1024 * 1024 * 1024,
+                    },
+                ),
+            )
+            .map_err(std::io::Error::other)?;
             let mut lan_server = None;
             if lan_config.enabled {
                 let asset_root = app.path().resource_dir()?.join("web");
@@ -301,8 +324,9 @@ pub fn run() {
                 let (_, permit) = localstream_core::lan::audit_activation(evidence);
                 if let (Ok(prepared), Some(permit)) = (result, permit) {
                     match tauri::async_runtime::block_on(
-                        localstream_core::server::activate_lan_server(
+                        localstream_core::server::activate_lan_server_with_playback(
                             Arc::clone(&core),
+                            playback.clone(),
                             prepared,
                             permit,
                         ),
@@ -319,17 +343,6 @@ pub fn run() {
                 }
             }
             let identity_store = identity_service.into_store();
-            let playback = tauri::async_runtime::block_on(
-                localstream_core::playback::LocalPlaybackService::start(
-                    localstream_core::media_jobs::MediaJobConfig {
-                        work_root: app_data.join("media-cache"),
-                        max_concurrent: 2,
-                        max_queued: 8,
-                        temporary_byte_quota: 8 * 1024 * 1024 * 1024,
-                    },
-                ),
-            )
-            .map_err(std::io::Error::other)?;
             let server = tauri::async_runtime::block_on(
                 localstream_core::server::start_local_server_with_playback(
                     Arc::clone(&core),
@@ -360,6 +373,7 @@ pub fn run() {
             pending_pairings,
             playback_job,
             prepare_playback,
+            prepare_hls,
             reject_pairing,
             reset_node_identity,
             release_playback,

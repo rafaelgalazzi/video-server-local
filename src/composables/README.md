@@ -10,7 +10,7 @@ Own reusable Vue-native state and coordinate typed backend adapters without intr
 - `useMediaLibrary`: restores persisted library state and coordinates approved-folder selection and safe scan results.
 - `useServerStatus`: loads the embedded HTTP server's safe address and exposure state.
 - `useNodeIdentity`: loads the trusted-local public identity and coordinates root export and confirmation-based reset.
-- `usePlayback`: owns selected media, explicit browser capabilities, Direct Play/fallback preparation, opaque media/WebVTT/job URLs, progress/error/cancel state, accessible track choices, and native preference persistence.
+- `usePlayback`: owns selected media, configuration-only track changes, explicit preview start, Direct Play/fallback preparation, safely delayed opaque media/WebVTT/job URLs, progress/error/cancel state, accessible track choices, and native preference persistence.
 - `usePairingRequests`: polls trusted-local pending requests and coordinates approve/reject decisions.
 - `useTrustedPeers`: loads safe peer summaries and owns confirmation-based revocation state.
 - `useRuntimeBootstrap`: selects native Tauri or same-origin browser transport and exposes explicit connection states.

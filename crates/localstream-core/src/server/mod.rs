@@ -10,8 +10,10 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use serde::Deserialize;
 use serde::Serialize;
+use subtle::ConstantTimeEq;
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
 use tokio::{net::TcpListener, sync::oneshot, task::JoinHandle};
 use tokio_util::io::ReaderStream;
@@ -27,6 +29,10 @@ use crate::node_identity::{LeafIssuanceError, NodeIdentity, TlsConfigError};
 const MAX_HTTPS_CONNECTIONS: usize = 64;
 const TLS_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
 const MAX_WEB_ASSET_BYTES: u64 = 8 * 1024 * 1024;
+const CSRF_COOKIE_NAME: &str = "__Host-localstream_csrf";
+const CSRF_HEADER_NAME: &str = "x-localstream-csrf";
+const CSRF_TOKEN_BYTES: usize = 32;
+const CSRF_TOKEN_LENGTH: usize = 43;
 
 #[derive(Debug, Clone)]
 pub struct BrowserAssets {
@@ -126,6 +132,23 @@ pub async fn activate_lan_server(
     prepared: PreparedLanServer,
     _permit: crate::lan::LanActivationPermit,
 ) -> Result<HttpsServerHandle, HttpsServerError> {
+    activate_lan_server_inner(core, None, prepared).await
+}
+
+pub async fn activate_lan_server_with_playback(
+    core: Arc<LocalStreamCore>,
+    playback: crate::playback::LocalPlaybackService,
+    prepared: PreparedLanServer,
+    _permit: crate::lan::LanActivationPermit,
+) -> Result<HttpsServerHandle, HttpsServerError> {
+    activate_lan_server_inner(core, Some(playback), prepared).await
+}
+
+async fn activate_lan_server_inner(
+    core: Arc<LocalStreamCore>,
+    playback: Option<crate::playback::LocalPlaybackService>,
+    prepared: PreparedLanServer,
+) -> Result<HttpsServerHandle, HttpsServerError> {
     let address = SocketAddr::new(
         prepared
             .config
@@ -149,6 +172,7 @@ pub async fn activate_lan_server(
         prepared.tls_config,
         policy,
         Some(prepared.assets),
+        playback,
         HttpsLimits::default(),
         true,
     )
@@ -411,12 +435,25 @@ pub fn router_with_playback(
     core: Arc<LocalStreamCore>,
     playback: crate::playback::LocalPlaybackService,
 ) -> Router {
+    let hls_routes = Router::new()
+        .route("/api/v1/playback/hls/{id}/{name}", get(stream_hls_asset))
+        .route_layer(middleware::from_fn(add_loopback_hls_cors));
     router(core)
         .route(
             "/api/v1/playback/jobs/{id}/output/{name}",
             get(stream_playback_output),
         )
+        .merge(hls_routes)
         .layer(Extension(playback))
+}
+
+async fn add_loopback_hls_cors(request: Request, next: Next) -> Response {
+    let mut response = next.run(request).await;
+    response.headers_mut().insert(
+        header::ACCESS_CONTROL_ALLOW_ORIGIN,
+        HeaderValue::from_static("*"),
+    );
+    response
 }
 
 pub fn authenticated_router(core: Arc<LocalStreamCore>) -> Router {
@@ -456,7 +493,34 @@ pub fn encrypted_router_with_assets(
         .layer(Extension(policy))
 }
 
+pub fn encrypted_router_with_assets_and_playback(
+    core: Arc<LocalStreamCore>,
+    policy: Arc<HttpsRequestPolicy>,
+    assets: BrowserAssets,
+    playback: crate::playback::LocalPlaybackService,
+) -> Router {
+    encrypted_api_router_with_hls(
+        core,
+        Arc::clone(&policy),
+        Some(crate::hls::HlsSessionService::new(playback)),
+    )
+    .route("/api", axum::routing::any(api_not_found))
+    .route("/api/{*path}", axum::routing::any(api_not_found))
+    .fallback(serve_browser_asset)
+    .layer(middleware::from_fn(require_https_host))
+    .layer(Extension(assets))
+    .layer(Extension(policy))
+}
+
 fn encrypted_api_router(core: Arc<LocalStreamCore>, policy: Arc<HttpsRequestPolicy>) -> Router {
+    encrypted_api_router_with_hls(core, policy, None)
+}
+
+fn encrypted_api_router_with_hls(
+    core: Arc<LocalStreamCore>,
+    policy: Arc<HttpsRequestPolicy>,
+    hls: Option<crate::hls::HlsSessionService>,
+) -> Router {
     let begin = Router::new()
         .route("/api/v1/pairing/requests", post(begin_pairing))
         .route_layer(middleware::from_fn_with_state(
@@ -484,10 +548,33 @@ fn encrypted_api_router(core: Arc<LocalStreamCore>, policy: Arc<HttpsRequestPoli
         ))
         .route_layer(middleware::from_fn(require_pairing_origin))
         .with_state(Arc::clone(&core));
-    authenticated_router(Arc::clone(&core))
+    let mut router = authenticated_router(Arc::clone(&core))
         .merge(begin)
         .merge(claim)
-        .merge(browser_claim)
+        .merge(browser_claim);
+    if let Some(hls) = hls {
+        let safe = Router::new()
+            .route("/api/v1/playback/hls/{id}/status", get(browser_hls_status))
+            .route("/api/v1/playback/hls/{id}/{name}", get(browser_hls_asset));
+        let unsafe_routes = Router::new()
+            .route("/api/v1/playback/hls", post(prepare_browser_hls))
+            .route(
+                "/api/v1/playback/hls/{id}",
+                axum::routing::delete(release_browser_hls),
+            )
+            .route_layer(middleware::from_fn(require_csrf))
+            .route_layer(middleware::from_fn(require_pairing_origin));
+        router = router.merge(
+            safe.merge(unsafe_routes)
+                .route_layer(middleware::from_fn_with_state(
+                    Arc::clone(&core),
+                    require_library_read,
+                ))
+                .layer(Extension(hls))
+                .with_state(Arc::clone(&core)),
+        );
+    }
+    router
         .layer(DefaultBodyLimit::max(2 * 1024))
         .layer(middleware::from_fn(require_https_host))
         .layer(Extension(policy))
@@ -705,6 +792,50 @@ async fn require_pairing_origin(
     }
 }
 
+async fn require_csrf(request: Request, next: Next) -> Response {
+    let cookie = strict_named_cookie(request.headers(), CSRF_COOKIE_NAME);
+    let mut header_values = request
+        .headers()
+        .get_all(header::HeaderName::from_static(CSRF_HEADER_NAME))
+        .iter();
+    let header = header_values.next().and_then(|value| value.to_str().ok());
+    let valid = cookie.is_some_and(valid_csrf_token)
+        && header.is_some_and(valid_csrf_token)
+        && header_values.next().is_none()
+        && cookie
+            .zip(header)
+            .is_some_and(|(left, right)| left.as_bytes().ct_eq(right.as_bytes()).into());
+    if valid {
+        next.run(request).await
+    } else {
+        ApiError::forbidden_request().into_response()
+    }
+}
+
+fn valid_csrf_token(value: &str) -> bool {
+    value.len() == CSRF_TOKEN_LENGTH
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+}
+
+fn strict_named_cookie<'a>(headers: &'a HeaderMap, expected: &str) -> Option<&'a str> {
+    let mut cookie_headers = headers.get_all(header::COOKIE).iter();
+    let header = cookie_headers.next()?;
+    if cookie_headers.next().is_some() {
+        return None;
+    }
+    let header = header.to_str().ok()?;
+    let mut result = None;
+    for pair in header.split(';') {
+        let (name, value) = pair.trim().split_once('=')?;
+        if name == expected && result.replace(value).is_some() {
+            return None;
+        }
+    }
+    result.filter(|value| !value.is_empty())
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct BeginPairingBody {
@@ -725,6 +856,12 @@ struct BeginPairingResponse {
 struct ClaimPairingBody {
     request_id: String,
     claim_secret: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PrepareHlsBody {
+    media_id: String,
 }
 
 #[derive(Serialize)]
@@ -867,10 +1004,21 @@ async fn claim_browser_pairing(
         session.session_token,
         session.expires_in_seconds,
     );
+    let mut csrf_secret = [0_u8; CSRF_TOKEN_BYTES];
+    getrandom::fill(&mut csrf_secret).map_err(|_| ApiError::internal())?;
+    let csrf_token = URL_SAFE_NO_PAD.encode(csrf_secret);
+    let csrf_cookie = format!(
+        "{CSRF_COOKIE_NAME}={csrf_token}; Path=/; Max-Age={}; Secure; SameSite=Strict",
+        session.expires_in_seconds,
+    );
     let mut response = StatusCode::NO_CONTENT.into_response();
-    response.headers_mut().insert(
+    response.headers_mut().append(
         header::SET_COOKIE,
         HeaderValue::from_str(&cookie).map_err(|_| ApiError::internal())?,
+    );
+    response.headers_mut().append(
+        header::SET_COOKIE,
+        HeaderValue::from_str(&csrf_cookie).map_err(|_| ApiError::internal())?,
     );
     Ok(response)
 }
@@ -968,18 +1116,21 @@ async fn start_loopback_https_server_with_options(
         tls_config,
         request_policy,
         assets,
+        None,
         limits,
         false,
     )
     .await
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn start_https_listener(
     listener: TcpListener,
     core: Arc<LocalStreamCore>,
     tls_config: Arc<rustls::ServerConfig>,
     request_policy: Arc<HttpsRequestPolicy>,
     assets: Option<BrowserAssets>,
+    playback: Option<crate::playback::LocalPlaybackService>,
     limits: HttpsLimits,
     lan_available: bool,
 ) -> Result<HttpsServerHandle, HttpsServerError> {
@@ -1004,14 +1155,21 @@ async fn start_https_listener(
                     };
                     let acceptor = tls_acceptor.clone();
                     let assets = assets.clone();
+                    let playback = playback.clone();
                     let request_policy = Arc::clone(&request_policy);
-                    let app = match assets {
-                        Some(assets) => encrypted_router_with_assets(
+                    let app = match (assets, playback) {
+                        (Some(assets), Some(playback)) => encrypted_router_with_assets_and_playback(
+                            Arc::clone(&core),
+                            request_policy,
+                            assets,
+                            playback,
+                        ),
+                        (Some(assets), None) => encrypted_router_with_assets(
                             Arc::clone(&core),
                             request_policy,
                             assets,
                         ),
-                        None => encrypted_router(Arc::clone(&core), request_policy),
+                        (None, _) => encrypted_router(Arc::clone(&core), request_policy),
                     };
                     let service = hyper_util::service::TowerToHyperService::new(
                         app.layer(Extension(peer)).layer(Extension(LanExposure(lan_available))),
@@ -1121,20 +1279,7 @@ async fn require_library_read(
 }
 
 fn strict_session_cookie(headers: &HeaderMap) -> Option<&str> {
-    let mut cookie_headers = headers.get_all(header::COOKIE).iter();
-    let header = cookie_headers.next()?;
-    if cookie_headers.next().is_some() {
-        return None;
-    }
-    let header = header.to_str().ok()?;
-    let mut session = None;
-    for pair in header.split(';') {
-        let (name, value) = pair.trim().split_once('=')?;
-        if name == crate::auth::SESSION_COOKIE_NAME && session.replace(value).is_some() {
-            return None;
-        }
-    }
-    session.filter(|value| !value.is_empty())
+    strict_named_cookie(headers, crate::auth::SESSION_COOKIE_NAME)
 }
 
 fn strict_bearer_token(headers: &HeaderMap) -> Option<&str> {
@@ -1309,6 +1454,121 @@ async fn stream_playback_output(
         );
     }
     Ok(response)
+}
+
+async fn stream_hls_asset(
+    Extension(playback): Extension<crate::playback::LocalPlaybackService>,
+    Path((job_id, name)): Path<(crate::media_jobs::MediaJobId, String)>,
+) -> Result<Response, ApiError> {
+    let output = playback
+        .open_hls_asset(job_id, &name)
+        .await
+        .map_err(|error| match error {
+            crate::media_jobs::MediaJobOutputError::UnknownJob
+            | crate::media_jobs::MediaJobOutputError::NotReady
+            | crate::media_jobs::MediaJobOutputError::InvalidName => ApiError::media_not_found(),
+            crate::media_jobs::MediaJobOutputError::Unavailable => ApiError::internal(),
+        })?;
+    hls_asset_response(output, &name)
+}
+
+fn hls_asset_response(
+    output: crate::media_jobs::MediaJobOutput,
+    name: &str,
+) -> Result<Response, ApiError> {
+    let content_type = if name == crate::hls::PLAYLIST_NAME {
+        "application/vnd.apple.mpegurl"
+    } else if name.ends_with(".ts") {
+        "video/mp2t"
+    } else {
+        return Err(ApiError::media_not_found());
+    };
+    let stream = ReaderStream::new(output.file);
+    let mut response = Response::new(Body::from_stream(stream));
+    response
+        .headers_mut()
+        .insert(header::CONTENT_TYPE, HeaderValue::from_static(content_type));
+    response.headers_mut().insert(
+        header::CONTENT_LENGTH,
+        HeaderValue::from_str(&output.size_bytes.to_string()).map_err(|_| ApiError::internal())?,
+    );
+    response.headers_mut().insert(
+        header::CACHE_CONTROL,
+        HeaderValue::from_static(if name == crate::hls::PLAYLIST_NAME {
+            "no-cache, no-store, must-revalidate"
+        } else {
+            "private, max-age=3600"
+        }),
+    );
+    response.headers_mut().insert(
+        header::X_CONTENT_TYPE_OPTIONS,
+        HeaderValue::from_static("nosniff"),
+    );
+    Ok(response)
+}
+
+async fn prepare_browser_hls(
+    State(core): State<Arc<LocalStreamCore>>,
+    Extension(peer): Extension<crate::auth::TrustedPeer>,
+    Extension(hls): Extension<crate::hls::HlsSessionService>,
+    Json(body): Json<PrepareHlsBody>,
+) -> Result<Json<crate::hls::HlsSubmission>, ApiError> {
+    hls.prepare(&core, &peer.id, &body.media_id)
+        .await
+        .map(Json)
+        .map_err(|error| match error {
+            crate::hls::HlsError::UnknownMedia => ApiError::media_not_found(),
+            crate::hls::HlsError::Job(
+                crate::media_jobs::MediaJobSubmitError::QueueFull
+                | crate::media_jobs::MediaJobSubmitError::TemporaryQuotaExceeded,
+            ) => ApiError {
+                status: StatusCode::SERVICE_UNAVAILABLE,
+                code: "playback_capacity_reached",
+                message: "Playback conversion is temporarily busy.",
+                content_range: None,
+                retry_after_seconds: Some(2),
+            },
+            _ => ApiError::internal(),
+        })
+}
+
+async fn browser_hls_status(
+    Extension(peer): Extension<crate::auth::TrustedPeer>,
+    Extension(hls): Extension<crate::hls::HlsSessionService>,
+    Path(job_id): Path<crate::media_jobs::MediaJobId>,
+) -> Result<Json<crate::media_jobs::MediaJobSnapshot>, ApiError> {
+    hls.snapshot(&peer.id, job_id)
+        .map(Json)
+        .ok_or_else(ApiError::media_not_found)
+}
+
+async fn browser_hls_asset(
+    Extension(peer): Extension<crate::auth::TrustedPeer>,
+    Extension(hls): Extension<crate::hls::HlsSessionService>,
+    Path((job_id, name)): Path<(crate::media_jobs::MediaJobId, String)>,
+) -> Result<Response, ApiError> {
+    let output = hls
+        .open_asset(&peer.id, job_id, &name)
+        .await
+        .map_err(|error| match error {
+            crate::media_jobs::MediaJobOutputError::UnknownJob
+            | crate::media_jobs::MediaJobOutputError::NotReady
+            | crate::media_jobs::MediaJobOutputError::InvalidName => ApiError::media_not_found(),
+            crate::media_jobs::MediaJobOutputError::Unavailable => ApiError::internal(),
+        })?;
+    hls_asset_response(output, &name)
+}
+
+async fn release_browser_hls(
+    Extension(peer): Extension<crate::auth::TrustedPeer>,
+    Extension(hls): Extension<crate::hls::HlsSessionService>,
+    Path(job_id): Path<crate::media_jobs::MediaJobId>,
+) -> Result<StatusCode, ApiError> {
+    if hls.cancel_and_release(&peer.id, job_id).await {
+        Ok(StatusCode::NO_CONTENT)
+    } else {
+        Err(ApiError::media_not_found())
+    }
 }
 
 async fn stream_subtitle(
@@ -2650,6 +2910,33 @@ mod tests {
         assert_eq!(response.headers()["content-range"], "bytes 3-6/10");
         let body = response.into_body().collect().await.unwrap().to_bytes();
         assert_eq!(&body[..], b"3456");
+    }
+
+    #[tokio::test]
+    async fn loopback_hls_not_ready_responses_remain_cors_readable() {
+        let directory = tempfile::tempdir().unwrap();
+        let playback =
+            crate::playback::LocalPlaybackService::start(crate::media_jobs::MediaJobConfig {
+                work_root: directory.path().join("jobs"),
+                max_concurrent: 1,
+                max_queued: 1,
+                temporary_byte_quota: 1024,
+            })
+            .await
+            .unwrap();
+        let core = Arc::new(LocalStreamCore::in_memory().unwrap());
+        let response = super::router_with_playback(core, playback)
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/playback/hls/00000000-0000-0000-0000-000000000001/index.m3u8")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        assert_eq!(response.headers()[header::ACCESS_CONTROL_ALLOW_ORIGIN], "*");
     }
 
     #[tokio::test]

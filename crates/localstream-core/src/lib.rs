@@ -4,6 +4,7 @@ use thiserror::Error;
 pub mod auth;
 pub mod compatibility;
 mod database;
+pub mod hls;
 pub mod lan;
 pub mod media;
 pub mod media_jobs;
@@ -404,6 +405,72 @@ impl LocalStreamCore {
                 subtitle,
             },
             decision,
+            ffmpeg,
+        )
+        .await
+    }
+
+    pub async fn submit_hls(
+        &self,
+        jobs: &media_jobs::MediaJobManager,
+        media_id: &str,
+    ) -> Result<hls::HlsSubmission, hls::HlsError> {
+        let library = self
+            .database
+            .current_library()
+            .map_err(|_| hls::HlsError::Unavailable)?
+            .ok_or(hls::HlsError::UnknownMedia)?;
+        let item = library
+            .items
+            .iter()
+            .find(|item| item.id == media_id)
+            .ok_or(hls::HlsError::UnknownMedia)?;
+        let metadata = item
+            .metadata
+            .as_ref()
+            .ok_or(hls::HlsError::UnsupportedInput)?;
+        let video = metadata
+            .video
+            .as_ref()
+            .ok_or(hls::HlsError::UnsupportedInput)?;
+        let location = self
+            .database
+            .media_location(media_id)
+            .map_err(|_| hls::HlsError::Unavailable)?
+            .ok_or(hls::HlsError::UnknownMedia)?;
+        let video_index = self
+            .database
+            .track_source_index(media_id, &video.id, "video")
+            .map_err(|_| hls::HlsError::Unavailable)?
+            .ok_or(hls::HlsError::UnsupportedInput)?;
+        let selected_audio = item
+            .selected_audio_track_id
+            .as_deref()
+            .and_then(|id| metadata.audio_tracks.iter().find(|track| track.id == id))
+            .or_else(|| metadata.audio_tracks.iter().find(|track| track.is_default))
+            .or_else(|| metadata.audio_tracks.first());
+        let audio_index = selected_audio
+            .map(|track| {
+                self.database
+                    .track_source_index(media_id, &track.id, "audio")
+                    .map_err(|_| hls::HlsError::Unavailable)?
+                    .ok_or(hls::HlsError::InvalidTrack)
+            })
+            .transpose()?;
+        let ffmpeg = media_tools::MediaToolPaths::discover_ffmpeg()
+            .await
+            .map_err(|_| hls::HlsError::Unavailable)?;
+        hls::submit(
+            jobs,
+            hls::HlsSource {
+                media_id: media_id.to_owned(),
+                approved_root: location.root_path,
+                media_path: location.media_path,
+                source_size_bytes: item.size_bytes,
+                video_index,
+                video_codec: video.codec.clone(),
+                audio_index,
+            },
             ffmpeg,
         )
         .await

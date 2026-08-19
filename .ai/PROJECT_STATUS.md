@@ -60,8 +60,10 @@ Phase B: Discovery and native pairing.
 - A reusable media job manager bounds transform concurrency and queued admission, deduplicates active keys, propagates cancellation to child processes, reserves temporary quota, cleans failed/stale output, and exposes path-free progress snapshots.
 - MP4/WebM remux fallback canonicalizes approved sources, resolves opaque selections to private indices, stream-copies exactly selected compatible tracks through bounded jobs, and exposes completed files without paths.
 - Software-only MP4/WebM transcode fallback handles selected audio, text subtitle conversion, and text/bitmap burn-in through bounded jobs without hardware acceleration.
-- Local desktop playback collects explicit browser capabilities, preserves Direct Play precedence, prepares remux/transcode jobs with progress and safe failure states, supports cancel/retry/cleanup, and Range-streams opaque completed output.
+- Local desktop playback collects explicit browser capabilities, preserves Direct Play precedence, withholds incompatible source URLs while preparing remux/transcode jobs, renders progress and safe failure states, supports cancel/retry/cleanup, and Range-streams opaque completed output.
 - Confirmed local database clearing transactionally removes indexed media, preferences, sessions, and trusted peers without deleting media files, node identity, or LAN configuration.
+- Progressive HLS starts from early segments, stream-copies H.264 video, converts selected/default audio to AAC, and uses full x264 only for incompatible video.
+- MKV playback uses only the native player timeline; its seekable range grows as progressive HLS segments become available.
 
 ## In Progress
 
@@ -85,8 +87,7 @@ Phase B: Discovery and native pairing.
 - Pairing requests are intentionally memory-only and disappear on restart.
 - Native client secret storage is not implemented.
 - Physical second-device certificate installation, browser onboarding, and playback are not verified.
-- Unsafe authenticated browser methods do not exist; CSRF tokens must be added before any are introduced.
-- The verified HTTPS lifecycle is not connected to desktop startup or LAN; interactive certificate export/install and real OS keyring operation remain untested.
+- Authenticated unsafe HLS methods require exact same-origin validation and a double-submit CSRF token.
 - LS-014 through LS-031 changes remain uncommitted in the working tree.
 
 ## Next Major Goal

@@ -13,6 +13,11 @@ interface PlaybackJob {
   state: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled'
   progressPermille: number
 }
+interface HlsPreparation {
+  jobId: string
+  playlistName: string
+  videoMode: 'copy' | 'transcode'
+}
 export interface AudioOption {
   id: string
   label: string
@@ -50,8 +55,10 @@ export function usePlayback(
   const subtitleSelectionError = ref<string | null>(null)
   const isSavingSubtitle = ref(false)
   const playbackProgress = ref<number | null>(null)
+  const preparationNotice = ref<string | null>(null)
   const activeJobId = ref<string | null>(null)
   const preparedStreamUrl = ref<string | null>(null)
+  const preparationResolved = ref(false)
 
   const audioOptions = computed<AudioOption[]>(() =>
     (selectedItem.value?.metadata?.audioTracks ?? []).map((track, index) => ({
@@ -109,27 +116,47 @@ export function usePlayback(
   const streamUrl = computed(() => {
     if (!server.value || !selectedItem.value) return null
     if (preparedStreamUrl.value) return preparedStreamUrl.value
+    if (enableFallback.value && !preparationResolved.value) return null
     const baseUrl = server.value.baseUrl.replace(/\/$/, '')
     return `${baseUrl}/api/v1/media/${encodeURIComponent(selectedItem.value.id)}/stream`
   })
 
   const canPlay = computed(() => server.value !== null)
 
-  function play(item: MediaItem) {
+  function select(item: MediaItem) {
     if (!server.value) {
       selectedItem.value = null
       status.value = 'error'
       error.value = 'The private playback API is unavailable.'
       return
     }
-
+    cleanupJob()
     selectedItem.value = item
-    status.value = 'loading'
+    status.value = 'idle'
     error.value = null
     audioSelectionError.value = null
     subtitleSelectionError.value = null
     preparedStreamUrl.value = null
+    preparationResolved.value = false
     playbackProgress.value = null
+    preparationNotice.value = null
+  }
+
+  function play(item: MediaItem) {
+    select(item)
+    start()
+  }
+
+  function start() {
+    const item = selectedItem.value
+    if (!item || !server.value) return
+    cleanupJob()
+    status.value = 'loading'
+    error.value = null
+    preparedStreamUrl.value = null
+    preparationResolved.value = !enableFallback.value
+    playbackProgress.value = null
+    preparationNotice.value = null
     if (enableFallback.value) void prepare(item)
   }
 
@@ -153,7 +180,9 @@ export function usePlayback(
     audioSelectionError.value = null
     subtitleSelectionError.value = null
     preparedStreamUrl.value = null
+    preparationResolved.value = false
     playbackProgress.value = null
+    preparationNotice.value = null
   }
 
   async function selectAudioTrack(trackId: string) {
@@ -171,7 +200,7 @@ export function usePlayback(
     try {
       await saveAudioSelection(item.id, trackId)
       item.selectedAudioTrackId = trackId
-      if (enableFallback.value) play(item)
+      stopForConfiguration()
     } catch (reason) {
       audioSelectionError.value = reason instanceof Error ? reason.message : String(reason)
     } finally {
@@ -200,7 +229,7 @@ export function usePlayback(
       await saveSubtitleSelection(item.id, mode, trackId)
       item.subtitleMode = mode
       item.selectedSubtitleTrackId = trackId
-      if (enableFallback.value) play(item)
+      stopForConfiguration()
     } catch (reason) {
       subtitleSelectionError.value = reason instanceof Error ? reason.message : String(reason)
     } finally {
@@ -221,7 +250,9 @@ export function usePlayback(
     markError,
     markPlaying,
     play,
+    select,
     playbackProgress,
+    preparationNotice,
     selectAudioTrack,
     selectSubtitle,
     selectedAudioTrackId,
@@ -232,17 +263,35 @@ export function usePlayback(
     subtitleSelectionValue,
     subtitleTrackUrl,
     status,
+    start,
     streamUrl,
+  }
+
+  function stopForConfiguration() {
+    cleanupJob()
+    status.value = 'idle'
+    error.value = null
+    preparedStreamUrl.value = null
+    preparationResolved.value = false
+    playbackProgress.value = null
+    preparationNotice.value = 'Configuration saved. Press Play preview when you are ready.'
   }
 
   async function prepare(item: MediaItem) {
     cleanupJob()
     try {
+      if (item.extension.toLowerCase() === 'mkv') {
+        await prepareHls(item)
+        return
+      }
       const result = await invoke<PlaybackPreparation>('prepare_playback', {
         mediaId: item.id,
         capabilities: browserCapabilities(),
       })
-      if (result.method === 'direct_play') return
+      if (result.method === 'direct_play') {
+        preparationResolved.value = true
+        return
+      }
       if (!result.jobId || !result.outputName || !server.value)
         throw new Error('Invalid playback job')
       activeJobId.value = result.jobId
@@ -252,6 +301,7 @@ export function usePlayback(
         if (job.state === 'completed') {
           const baseUrl = server.value.baseUrl.replace(/\/$/, '')
           preparedStreamUrl.value = `${baseUrl}/api/v1/playback/jobs/${encodeURIComponent(result.jobId)}/output/${encodeURIComponent(result.outputName)}`
+          preparationResolved.value = true
           return
         }
         if (job.state === 'failed' || job.state === 'cancelled')
@@ -265,12 +315,93 @@ export function usePlayback(
     }
   }
 
+  async function prepareHls(item: MediaItem) {
+    const result = canPersistAudio.value
+      ? await invoke<HlsPreparation>('prepare_hls', { mediaId: item.id })
+      : await prepareBrowserHls(item.id)
+    if (!result.jobId || !server.value) throw new Error('Invalid HLS playback session')
+    activeJobId.value = result.jobId
+    preparationNotice.value =
+      result.videoMode === 'copy'
+        ? 'Fast start: copying video and converting only audio. The native seek range expands as segments become ready.'
+        : 'This video codec requires full software conversion and may use significant CPU.'
+    const baseUrl = server.value.baseUrl.replace(/\/$/, '')
+    const playlistUrl = `${baseUrl}/api/v1/playback/hls/${encodeURIComponent(result.jobId)}/${encodeURIComponent(result.playlistName)}`
+    const deadline = Date.now() + 60_000
+    while (activeJobId.value === result.jobId) {
+      const response = await fetch(playlistUrl, {
+        cache: 'no-store',
+        credentials: canPersistAudio.value ? 'omit' : 'same-origin',
+      })
+      if (response.ok) {
+        preparedStreamUrl.value = playlistUrl
+        preparationResolved.value = true
+        return
+      }
+      const job = canPersistAudio.value
+        ? await invoke<PlaybackJob>('playback_job', { jobId: result.jobId })
+        : await browserHlsJob(result.jobId)
+      playbackProgress.value = job.progressPermille
+      if (job.state === 'failed' || job.state === 'cancelled') {
+        throw new Error('HLS playback preparation failed')
+      }
+      if (job.state === 'completed') {
+        throw new Error('HLS conversion completed, but its playlist is unavailable.')
+      }
+      if (Date.now() >= deadline) {
+        throw new Error('Browser-compatible playback did not start within 60 seconds.')
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, 150))
+    }
+  }
+
   function cleanupJob() {
     const jobId = activeJobId.value
     activeJobId.value = null
     if (!jobId) return
-    void invoke('cancel_playback', { jobId }).finally(() => invoke('release_playback', { jobId }))
+    if (canPersistAudio.value) {
+      void invoke('cancel_playback', { jobId }).finally(() => invoke('release_playback', { jobId }))
+    } else {
+      void releaseBrowserHls(jobId)
+    }
   }
+}
+
+async function prepareBrowserHls(mediaId: string): Promise<HlsPreparation> {
+  const response = await fetch('/api/v1/playback/hls', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: {
+      'content-type': 'application/json',
+      'x-localstream-csrf': csrfToken(),
+    },
+    body: JSON.stringify({ mediaId }),
+  })
+  if (!response.ok) throw new Error('Browser-compatible playback could not be started.')
+  return (await response.json()) as HlsPreparation
+}
+
+async function browserHlsJob(jobId: string): Promise<PlaybackJob> {
+  const response = await fetch(`/api/v1/playback/hls/${encodeURIComponent(jobId)}/status`, {
+    credentials: 'same-origin',
+    cache: 'no-store',
+  })
+  if (!response.ok) throw new Error('Browser playback preparation was interrupted.')
+  return (await response.json()) as PlaybackJob
+}
+
+async function releaseBrowserHls(jobId: string) {
+  await fetch(`/api/v1/playback/hls/${encodeURIComponent(jobId)}`, {
+    method: 'DELETE',
+    credentials: 'same-origin',
+    headers: { 'x-localstream-csrf': csrfToken() },
+  })
+}
+
+function csrfToken() {
+  const prefix = '__Host-localstream_csrf='
+  const cookie = document.cookie.split('; ').find((value) => value.startsWith(prefix))
+  return cookie?.slice(prefix.length) ?? ''
 }
 
 function browserCapabilities() {

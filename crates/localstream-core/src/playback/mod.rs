@@ -87,6 +87,34 @@ impl LocalPlaybackService {
         }
     }
 
+    pub async fn prepare_hls(
+        &self,
+        core: &LocalStreamCore,
+        media_id: &str,
+    ) -> Result<crate::hls::HlsSubmission, crate::hls::HlsError> {
+        core.submit_hls(&self.jobs, media_id).await
+    }
+
+    pub async fn open_hls_asset(
+        &self,
+        id: MediaJobId,
+        name: &str,
+    ) -> Result<MediaJobOutput, MediaJobOutputError> {
+        crate::hls::open_asset(&self.jobs, id, name).await
+    }
+
+    pub fn hls_snapshot(&self, id: MediaJobId) -> Option<MediaJobSnapshot> {
+        crate::hls::snapshot(&self.jobs, id)
+    }
+
+    pub fn cancel_hls(&self, id: MediaJobId) -> bool {
+        crate::hls::cancel(&self.jobs, id)
+    }
+
+    pub async fn release_hls(&self, id: MediaJobId) -> bool {
+        crate::hls::release(&self.jobs, id).await
+    }
+
     pub fn snapshot(&self, id: MediaJobId) -> Option<MediaJobSnapshot> {
         self.jobs.snapshot(id)
     }

@@ -372,14 +372,7 @@ impl MediaJobManager {
         id: MediaJobId,
         name: &str,
     ) -> Result<MediaJobOutput, MediaJobOutputError> {
-        let valid_name = Path::new(name).components().count() == 1
-            && matches!(
-                Path::new(name).components().next(),
-                Some(std::path::Component::Normal(_))
-            );
-        if !valid_name {
-            return Err(MediaJobOutputError::InvalidName);
-        }
+        validate_output_name(name)?;
         {
             let state = lock(&self.inner.state);
             let record = state.jobs.get(&id).ok_or(MediaJobOutputError::UnknownJob)?;
@@ -410,9 +403,67 @@ impl MediaJobManager {
         })
     }
 
+    pub async fn open_progressive_output(
+        &self,
+        id: MediaJobId,
+        name: &str,
+    ) -> Result<MediaJobOutput, MediaJobOutputError> {
+        validate_output_name(name)?;
+        let state = {
+            let manager = lock(&self.inner.state);
+            let record = manager
+                .jobs
+                .get(&id)
+                .ok_or(MediaJobOutputError::UnknownJob)?;
+            let state = lock(record).state;
+            state
+        };
+        if !matches!(state, MediaJobState::Running | MediaJobState::Completed) {
+            return Err(MediaJobOutputError::NotReady);
+        }
+        let path = self.inner.root.join(id.0.to_string()).join(name);
+        let entry = match tokio::fs::symlink_metadata(&path).await {
+            Ok(entry) => entry,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return Err(MediaJobOutputError::NotReady)
+            }
+            Err(_) => return Err(MediaJobOutputError::Unavailable),
+        };
+        if !entry.is_file() || entry.file_type().is_symlink() {
+            return Err(MediaJobOutputError::Unavailable);
+        }
+        let file = tokio::fs::File::open(&path)
+            .await
+            .map_err(|_| MediaJobOutputError::Unavailable)?;
+        let metadata = file
+            .metadata()
+            .await
+            .map_err(|_| MediaJobOutputError::Unavailable)?;
+        if !metadata.is_file() || metadata.len() == 0 {
+            return Err(MediaJobOutputError::NotReady);
+        }
+        Ok(MediaJobOutput {
+            file,
+            size_bytes: metadata.len(),
+        })
+    }
+
     #[cfg(test)]
     pub(crate) fn test_output_path(&self, id: MediaJobId, name: &str) -> PathBuf {
         self.inner.root.join(id.0.to_string()).join(name)
+    }
+}
+
+fn validate_output_name(name: &str) -> Result<(), MediaJobOutputError> {
+    let valid_name = Path::new(name).components().count() == 1
+        && matches!(
+            Path::new(name).components().next(),
+            Some(std::path::Component::Normal(_))
+        );
+    if valid_name {
+        Ok(())
+    } else {
+        Err(MediaJobOutputError::InvalidName)
     }
 }
 
