@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, watch } from 'vue'
+import { computed, onMounted, onUnmounted, watch } from 'vue'
+import BrowserBootstrapPanel from './components/BrowserBootstrapPanel.vue'
+import LanServerPanel from './components/LanServerPanel.vue'
 import FoundationStatus from './components/FoundationStatus.vue'
 import MediaLibraryPanel from './components/MediaLibraryPanel.vue'
 import NodeIdentityPanel from './components/NodeIdentityPanel.vue'
@@ -14,14 +16,28 @@ import { usePlayback } from './composables/usePlayback'
 import { usePairingRequests } from './composables/usePairingRequests'
 import { useServerStatus } from './composables/useServerStatus'
 import { useTrustedPeers } from './composables/useTrustedPeers'
+import { useRuntimeBootstrap } from './composables/useRuntimeBootstrap'
+import { useLanServer } from './composables/useLanServer'
 
 const { appInfo, error, isLoading, load, runtimeLabel } = useAppInfo()
 const mediaLibrary = useMediaLibrary()
 const nodeIdentity = useNodeIdentity()
 const serverStatus = useServerStatus()
-const playback = usePlayback(serverStatus.server)
 const pairing = usePairingRequests()
 const trustedPeers = useTrustedPeers()
+const runtime = useRuntimeBootstrap()
+const lanServer = useLanServer()
+const activeServer = computed(() =>
+  runtime.isNative.value ? serverStatus.server.value : runtime.server.value,
+)
+const activeLibrary = computed(() =>
+  runtime.isNative.value ? mediaLibrary.library.value : runtime.library.value,
+)
+const activeItemCountLabel = computed(() => {
+  const count = activeLibrary.value?.items.length ?? 0
+  return `${count} ${count === 1 ? 'video' : 'videos'}`
+})
+const playback = usePlayback(activeServer)
 
 watch(
   () => mediaLibrary.library.value?.items,
@@ -37,15 +53,22 @@ async function selectLibrary() {
 }
 
 onMounted(() => {
+  if (!runtime.isNative.value) {
+    void runtime.loadBrowser()
+    return
+  }
   void load()
   void mediaLibrary.loadCurrentLibrary()
   void nodeIdentity.load()
   void serverStatus.load()
   void pairing.startPolling()
   void trustedPeers.load()
+  void lanServer.load()
 })
 
-onUnmounted(() => pairing.stopPolling())
+onUnmounted(() => {
+  if (runtime.isNative.value) pairing.stopPolling()
+})
 </script>
 
 <template>
@@ -59,6 +82,7 @@ onUnmounted(() => pairing.stopPolling())
       </p>
 
       <FoundationStatus
+        v-if="runtime.isNative.value"
         :app-info="appInfo"
         :error="error"
         :is-loading="isLoading"
@@ -66,13 +90,25 @@ onUnmounted(() => pairing.stopPolling())
         @retry="load"
       />
 
+      <BrowserBootstrapPanel
+        v-else
+        :error="runtime.error.value"
+        :is-pairing="runtime.isPairing.value"
+        :pairing="runtime.pairing.value"
+        :state="runtime.state.value"
+        @begin-pairing="runtime.beginPairing"
+        @finish-pairing="runtime.finishPairing"
+        @retry="runtime.loadBrowser"
+      />
+
       <MediaLibraryPanel
         :can-play="playback.canPlay.value"
-        :error="mediaLibrary.error.value"
+        :can-select="runtime.isNative.value"
+        :error="runtime.isNative.value ? mediaLibrary.error.value : runtime.error.value"
         :is-scanning="mediaLibrary.isScanning.value"
         :is-restoring="mediaLibrary.isRestoring.value"
-        :item-count-label="mediaLibrary.itemCountLabel.value"
-        :library="mediaLibrary.library.value"
+        :item-count-label="activeItemCountLabel"
+        :library="activeLibrary"
         :notice="mediaLibrary.notice.value"
         @play="playback.play"
         @select="selectLibrary"
@@ -90,12 +126,14 @@ onUnmounted(() => pairing.stopPolling())
       />
 
       <ServerStatus
+        v-if="runtime.isNative.value"
         :error="serverStatus.error.value"
         :server="serverStatus.server.value"
         :status-label="serverStatus.statusLabel.value"
       />
 
       <NodeIdentityPanel
+        v-if="runtime.isNative.value"
         :error="nodeIdentity.error.value"
         :identity="nodeIdentity.identity.value"
         :is-confirming-reset="nodeIdentity.isConfirmingReset.value"
@@ -110,6 +148,7 @@ onUnmounted(() => pairing.stopPolling())
       />
 
       <PairingRequestsPanel
+        v-if="runtime.isNative.value"
         :error="pairing.error.value"
         :is-deciding="pairing.isDeciding"
         :is-loading="pairing.isLoading.value"
@@ -121,6 +160,7 @@ onUnmounted(() => pairing.stopPolling())
       />
 
       <TrustedPeersPanel
+        v-if="runtime.isNative.value"
         :confirming-peer="trustedPeers.confirmingPeer.value"
         :error="trustedPeers.error.value"
         :is-loading="trustedPeers.isLoading.value"
@@ -131,6 +171,18 @@ onUnmounted(() => pairing.stopPolling())
         @confirm="trustedPeers.confirmRevocation"
         @refresh="trustedPeers.load"
         @revoke="trustedPeers.requestRevocation"
+      />
+
+      <LanServerPanel
+        v-if="runtime.isNative.value"
+        :addresses="lanServer.addresses.value"
+        :config="lanServer.config.value"
+        :error="lanServer.error.value"
+        :is-saving="lanServer.isSaving.value"
+        :notice="lanServer.notice.value"
+        :status="lanServer.status.value"
+        :status-label="lanServer.statusLabel.value"
+        @save="lanServer.save"
       />
     </section>
 

@@ -6,7 +6,7 @@
 
 ## Current Milestone
 
-Milestone 2 foundation: embedded HTTP API and loopback Direct Play.
+Phase A complete: secure explicitly configured LAN web server.
 
 ## Working
 
@@ -45,6 +45,13 @@ Milestone 2 foundation: embedded HTTP API and loopback Direct Play.
 - Approved browser claims set a 24-hour `__Host-` secure HttpOnly strict-same-site cookie with no response secret; digest-only sessions survive restart and fail uniformly on expiry, malformed cookies, capability errors, or peer/identity revocation.
 - The loopback HTTPS surface strictly validates one configured Host, requires exact same-origin Origin and safe Fetch Metadata on pairing POSTs before rate limiting, ignores forwarded authority metadata, caps TLS connections at 64, and times out stalled handshakes after five seconds.
 - The dormant HTTPS surface can optionally serve a validated production Vue directory with bounded canonical reads, correct content types, safe cache headers, SPA fallback, strict API precedence, and unchanged protected-route authentication.
+- Vue selects native Tauri or remote same-origin HTTPS mode with explicit bootstrap, pairing-required, authenticated, disconnected, and retry states.
+- Trusted-local browser trust onboarding requires full-fingerprint acknowledgement and documents platform procedures without warning bypass or automatic installation.
+- Native peer trust binds node ID, verified root fingerprint, endpoint hints, and bearer credentials behind an isolated platform-protected store with explicit replacement/deletion.
+- LAN configuration is disabled by default, persists one validated explicit private address/port and optional DNS name, and rejects loopback, wildcard, multicast, and public addresses.
+- TLS leaves retain the stable root identity, renew before expiry, and rotate for SAN/address changes.
+- Desktop startup composes packaged UI, identity, TLS, authenticated routes, sessions, limits, and configuration fail-closed while preserving trusted-local startup on LAN failure.
+- Audited activation can bind exactly one private interface only after every Phase A security evidence gate; isolated-interface TLS/auth/downgrade coverage passes.
 
 ## In Progress
 
@@ -52,8 +59,6 @@ Milestone 2 foundation: embedded HTTP API and loopback Direct Play.
 
 ## Not Started
 
-- Client secure storage and safe LAN binding.
-- Remote-browser bootstrap and pairing states.
 - Node discovery, pairing, trust, and distributed libraries.
 - FFmpeg probing/transcoding and concurrency management.
 - Automated tests, CI, packaging, and platform verification.
@@ -69,13 +74,13 @@ Milestone 2 foundation: embedded HTTP API and loopback Direct Play.
 - Playback compatibility is delegated to the embedded browser; ffprobe metadata and transcoding fallback are not implemented.
 - Pairing requests are intentionally memory-only and disappear on restart.
 - Native client secret storage is not implemented.
-- The authenticated HTTPS router is loopback-only and dormant from desktop startup; LAN exposure remains prohibited.
-- Packaged asset-path orchestration, remote-browser bootstrap, and unsafe authenticated browser methods/CSRF tokens are not implemented.
+- Physical second-device certificate installation, browser onboarding, and playback are not verified.
+- Unsafe authenticated browser methods do not exist; CSRF tokens must be added before any are introduced.
 - The verified HTTPS lifecycle is not connected to desktop startup or LAN; interactive certificate export/install and real OS keyring operation remain untested.
-- LS-014 through LS-024 changes remain uncommitted in the working tree.
+- LS-014 through LS-031 changes remain uncommitted in the working tree.
 
 ## Next Major Goal
 
-Implement LS-025 remote-browser application bootstrap while preserving the Tauri/trusted-local desktop flow and cookie-only browser authentication.
+Start Phase B with LS-032 discovery protocol ADR and service contract.
 
 The dependency-ordered remaining backlog is maintained in [IMPLEMENTATION_ROADMAP.md](IMPLEMENTATION_ROADMAP.md). The committed completion target is the release-ready desktop LAN MVP through LS-060; post-MVP work is gated and must not silently resolve deferred architecture decisions.

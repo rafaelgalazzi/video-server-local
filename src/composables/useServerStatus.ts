@@ -3,7 +3,7 @@ import { invoke } from '@tauri-apps/api/core'
 
 export interface ServerInfo {
   baseUrl: string
-  bindScope: 'loopback'
+  bindScope: 'loopback' | 'lan'
   lanAvailable: boolean
 }
 

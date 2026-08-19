@@ -29,7 +29,7 @@ Vue 3, Vite, TypeScript, and the Tauri JavaScript API.
 
 ## Current Limitations
 
-The current library is persisted locally in SQLite, selected items can use browser-native Direct Play, and the local UI polls for pairing decisions after native startup. Routing, server control, compatibility fallback, remote pairing transport, and LAN playback are not implemented.
+The current library is persisted locally in SQLite. Native mode retains Tauri administration and loopback playback; remote browser mode bootstraps through same-origin HTTPS cookies. The desktop can explicitly configure one secure LAN address, disabled by default.
 
 ## Planned Work
 

@@ -42,7 +42,7 @@ impl NodeIdentity {
         self.issue_server_leaf_at(names, time::OffsetDateTime::now_utc())
     }
 
-    fn issue_server_leaf_at(
+    pub(crate) fn issue_server_leaf_at(
         &self,
         names: &[String],
         now: time::OffsetDateTime,

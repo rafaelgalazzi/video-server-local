@@ -6,7 +6,7 @@ Provide the Tauri 2 desktop shell, lifecycle, permissions, configuration, and th
 
 ## Features
 
-The shell creates the main window, initializes the database-backed core and protected node identity, starts the embedded loopback HTTP server, exposes safe trusted-local commands, and provides an approved-folder picker.
+The shell creates the main window, initializes the database-backed core and protected node identity, always starts loopback HTTP, and optionally starts audited TLS-only LAN serving from explicit persisted configuration. LAN failures do not prevent trusted-local startup.
 
 ## Important Files
 
@@ -26,7 +26,7 @@ Tauri 2 and the workspace-local `localstream-core` crate.
 
 ## Current Limitations
 
-No HTTP server, playback integration, mobile project, or release packaging configuration exists.
+Release installer behavior, firewall UX, mobile projects, and physical second-device trust onboarding remain unverified.
 
 ## Planned Work
 

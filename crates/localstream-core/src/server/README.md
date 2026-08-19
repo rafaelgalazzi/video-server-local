@@ -34,6 +34,7 @@ Expose versioned HTTP adapters backed by the reusable Rust core while keeping se
 - `BrowserAssets::from_directory`: validates an explicit production web root and required bounded `index.html`.
 - `encrypted_router_with_assets`: adds public static assets and SPA navigation without masking `/api` responses.
 - `start_loopback_https_server_with_assets`: opt-in loopback lifecycle used to verify the complete same-origin surface.
+- `prepare_lan_server` / `activate_lan_server`: fail-closed composition and permit-gated exact-address TLS activation.
 - `HttpsServerHandle`: reports loopback-only HTTPS metadata and supports awaited graceful shutdown.
 
 ## Dependencies
@@ -42,7 +43,7 @@ Axum, Hyper, Tokio, Tokio-Rustls, and Rustls. Handlers call `LocalStreamCore` ra
 
 ## Current Limitations
 
-The active desktop server is deliberately unreachable from other LAN devices and continues to use the trusted-local HTTP router. The separate HTTPS lifecycle exposes native and browser pairing on loopback but is not started by Tauri. Its asset-aware variant requires an explicit validated production directory; packaged-path resolution remains a platform/lifecycle responsibility. Static files are capped at 8 MiB, canonicalized inside that directory, served publicly with `nosniff`, and `/assets/` misses never fall back to HTML. It accepts at most 64 TLS connections, allows five seconds for each handshake, validates one configured Host on every request, and requires exact same-origin Origin plus safe optional `Sec-Fetch-Site` on pairing POSTs. Browser cookies authenticate only safe GET library/media routes. Configurable LAN binding, unsafe cookie methods, and CSRF tokens are not implemented. Direct Play is limited to eight concurrent streams.
+The trusted-local desktop server remains loopback HTTP. Explicit persisted configuration can separately activate same-origin HTTPS on exactly one validated private address after the Phase A security audit. Missing assets, identity/TLS errors, bind failures, or a missing audit permit fail closed without affecting local startup. Static files are capped at 8 MiB, TLS connections at 64, and handshakes at five seconds. Unsafe cookie methods do not exist; CSRF tokens become mandatory before adding one. Direct Play is limited to eight concurrent streams.
 
 ## Planned Work
 

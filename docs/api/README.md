@@ -25,7 +25,7 @@ Errors use:
 }
 ```
 
-The server currently binds to `127.0.0.1` on an ephemeral port. The Tauri `server_info` adapter reports the active base URL. This is not yet a LAN-accessible API.
+The trusted-local server binds to `127.0.0.1` on an ephemeral port. Separately, an explicitly enabled and security-audited HTTPS server may bind one configured private LAN address after restart. It never falls back to plaintext.
 
 ## Authenticated Router Foundation
 

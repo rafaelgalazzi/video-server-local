@@ -13,6 +13,9 @@ Own reusable Vue-native state and coordinate typed backend adapters without intr
 - `usePlayback`: owns selected media, opaque-ID stream URL construction, and playback state.
 - `usePairingRequests`: polls trusted-local pending requests and coordinates approve/reject decisions.
 - `useTrustedPeers`: loads safe peer summaries and owns confirmation-based revocation state.
+- `useRuntimeBootstrap`: selects native Tauri or same-origin browser transport and exposes explicit connection states.
+- `useTrustOnboarding`: gates root export on fingerprint-comparison acknowledgement.
+- `useLanServer`: manages disabled-by-default explicit LAN configuration and status.
 
 ## Important Files
 
@@ -40,7 +43,7 @@ Vue Composition API and the Tauri `invoke` adapter.
 
 ## Current Limitations
 
-Browser preview cannot call native commands and intentionally shows non-fatal preview states. Pairing polling starts only after its first native load succeeds, so preview failures do not repeat. The desktop adapter restores the current SQLite-backed library on startup.
+Native mode uses Tauri commands. A remotely hosted browser uses same-origin cookie requests and never receives bearer credentials. Pairing polling and administration run only in native mode. LAN endpoint changes require restart.
 
 ## Planned Work
 

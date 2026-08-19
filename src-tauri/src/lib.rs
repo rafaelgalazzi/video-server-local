@@ -4,6 +4,13 @@ use localstream_core::{AppInfo, LocalStreamCore};
 use tauri::Manager;
 use tauri_plugin_dialog::DialogExt;
 
+struct LanRuntime {
+    config_store: localstream_core::lan::FileLanConfigStore,
+    config: std::sync::Mutex<localstream_core::lan::LanServerConfig>,
+    status: std::sync::Mutex<localstream_core::lan::LanServerStatus>,
+    _server: std::sync::Mutex<Option<localstream_core::server::HttpsServerHandle>>,
+}
+
 #[tauri::command]
 fn app_info(core: tauri::State<'_, Arc<LocalStreamCore>>) -> AppInfo {
     core.app_info()
@@ -38,6 +45,49 @@ fn server_info(
     server: tauri::State<'_, localstream_core::server::ServerHandle>,
 ) -> localstream_core::server::ServerInfo {
     server.info()
+}
+
+#[tauri::command]
+fn lan_server_config(
+    runtime: tauri::State<'_, LanRuntime>,
+) -> Result<localstream_core::lan::LanServerConfig, String> {
+    runtime
+        .config
+        .lock()
+        .map(|value| value.clone())
+        .map_err(|_| "the LAN configuration is unavailable".to_owned())
+}
+
+#[tauri::command]
+fn save_lan_server_config(
+    runtime: tauri::State<'_, LanRuntime>,
+    config: localstream_core::lan::LanServerConfig,
+) -> Result<(), String> {
+    let service = localstream_core::lan::LanConfigService::new(&runtime.config_store);
+    service.save(&config).map_err(|error| error.to_string())?;
+    *runtime
+        .config
+        .lock()
+        .map_err(|_| "the LAN configuration is unavailable".to_owned())? = config;
+    Ok(())
+}
+
+#[tauri::command]
+fn lan_server_status(
+    runtime: tauri::State<'_, LanRuntime>,
+) -> Result<localstream_core::lan::LanServerStatus, String> {
+    runtime
+        .status
+        .lock()
+        .map(|value| value.clone())
+        .map_err(|_| "the LAN server status is unavailable".to_owned())
+}
+
+#[tauri::command]
+fn suggested_lan_addresses() -> Vec<std::net::IpAddr> {
+    localstream_core::lan::primary_lan_address()
+        .into_iter()
+        .collect()
 }
 
 #[tauri::command]
@@ -147,6 +197,55 @@ pub fn run() {
                 .load_or_create()
                 .map_err(std::io::Error::other)?;
             let identity_summary = identity.summary().clone();
+            let config_store =
+                localstream_core::lan::FileLanConfigStore::new(app_data.join("lan-server.conf"));
+            let lan_config = localstream_core::lan::LanConfigService::new(&config_store)
+                .load()
+                .map_err(std::io::Error::other)?;
+            let mut lan_status = localstream_core::lan::LanServerStatus {
+                configured: lan_config.enabled,
+                active: false,
+                endpoint: None,
+                failure: None,
+            };
+            let mut lan_server = None;
+            if lan_config.enabled {
+                let asset_root = app.path().resource_dir()?.join("web");
+                let result = localstream_core::server::BrowserAssets::from_directory(asset_root)
+                    .map_err(|_| localstream_core::server::HttpsServerError::ListenerUnavailable)
+                    .and_then(|assets| {
+                        localstream_core::server::prepare_lan_server(
+                            &identity,
+                            &localstream_core::lan::TlsLeafLifecycle::default(),
+                            lan_config.clone(),
+                            assets,
+                        )
+                    });
+                let evidence = localstream_core::lan::LanSecurityEvidence {
+                    browser_trust_onboarding: true,
+                    native_protected_storage: true,
+                    negative_security_suite: true,
+                };
+                let (_, permit) = localstream_core::lan::audit_activation(evidence);
+                if let (Ok(prepared), Some(permit)) = (result, permit) {
+                    match tauri::async_runtime::block_on(
+                        localstream_core::server::activate_lan_server(
+                            Arc::clone(&core),
+                            prepared,
+                            permit,
+                        ),
+                    ) {
+                        Ok(server) => {
+                            lan_status.active = true;
+                            lan_status.endpoint = Some(server.info().base_url);
+                            lan_server = Some(server);
+                        }
+                        Err(_) => lan_status.failure = Some("secure_start_failed"),
+                    }
+                } else {
+                    lan_status.failure = Some("security_preflight_failed");
+                }
+            }
             let identity_store = identity_service.into_store();
             let server = tauri::async_runtime::block_on(
                 localstream_core::server::start_local_server(Arc::clone(&core)),
@@ -155,6 +254,12 @@ pub fn run() {
             app.manage(identity_summary);
             app.manage(identity_store);
             app.manage(server);
+            app.manage(LanRuntime {
+                config_store,
+                config: std::sync::Mutex::new(lan_config),
+                status: std::sync::Mutex::new(lan_status),
+                _server: std::sync::Mutex::new(lan_server),
+            });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -168,6 +273,10 @@ pub fn run() {
             reset_node_identity,
             revoke_trusted_peer,
             server_info,
+            lan_server_config,
+            save_lan_server_config,
+            lan_server_status,
+            suggested_lan_addresses,
             select_and_scan_library,
             trusted_peers
         ])

@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import type { NodeIdentitySummary } from '../composables/useNodeIdentity'
+import { useTrustOnboarding } from '../composables/useTrustOnboarding'
+
+const { canExport, fingerprintAcknowledged } = useTrustOnboarding()
 
 defineProps<{
   error: string | null
@@ -39,10 +42,37 @@ defineEmits<{
       </div>
     </dl>
     <div v-if="identity && !isConfirmingReset" class="identity-panel__actions">
-      <button type="button" :disabled="isExporting" @click="$emit('exportCertificate')">
+      <button
+        type="button"
+        :disabled="isExporting || !canExport"
+        :title="fingerprintAcknowledged ? undefined : 'Acknowledge fingerprint comparison first'"
+        @click="$emit('exportCertificate')"
+      >
         {{ isExporting ? 'Exporting…' : 'Export trust certificate' }}
       </button>
       <button type="button" @click="$emit('reset')">Reset node identity</button>
+    </div>
+    <div v-if="identity && !isConfirmingReset" class="identity-panel__trust-guidance">
+      <h3>Browser trust onboarding</h3>
+      <ol>
+        <li>Export the public certificate from this trusted desktop.</li>
+        <li>Move it to the browser device using a trusted method.</li>
+        <li>
+          Before installation, compare the complete SHA-256 fingerprint with the value shown above.
+        </li>
+        <li>Install it only into the operating system or browser trusted-root store.</li>
+        <li>Close and reopen the browser, then use this node's HTTPS address.</li>
+      </ol>
+      <p>
+        Windows: import for the current user into Trusted Root Certification Authorities. macOS: add
+        it to the login keychain and explicitly set trust. Linux and browser-specific stores: follow
+        the platform administrator's certificate-authority procedure. These steps vary by release
+        and are not automatically performed by LocalStream.
+      </p>
+      <label>
+        <input v-model="fingerprintAcknowledged" type="checkbox" />
+        I will compare the complete fingerprint before trusting this certificate.
+      </label>
     </div>
     <p v-if="identity" class="identity-panel__trust-guidance">
       Installing this certificate grants your browser or operating system trust in this node. Export

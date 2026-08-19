@@ -2,7 +2,7 @@
 
 LocalStream is a cross-platform, local-first media application in active development for browsing and streaming explicitly approved media libraries across a LAN without depending on cloud infrastructure.
 
-The stack is Vue 3 + TypeScript for the interface, Tauri 2 for the native shell, and a reusable Rust core for media, persistence, networking, streaming, and security. Local folder scanning, SQLite restoration, a loopback versioned HTTP API, opaque-ID Direct Play with HTTP Range, native-controls playback, pairing approval, and trusted-device revocation are implemented; authenticated LAN access is not yet implemented.
+The stack is Vue 3 + TypeScript for the interface, Tauri 2 for the native shell, and a reusable Rust core for media, persistence, networking, streaming, and security. Local scanning, SQLite restoration, opaque-ID Range streaming, private-PKI HTTPS, browser/native pairing, protected sessions and native pins, explicit LAN configuration, and audited TLS-only LAN activation are implemented. Discovery is the next milestone.
 
 ## Start Here
 

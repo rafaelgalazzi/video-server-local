@@ -27,8 +27,10 @@ This document combines implemented safeguards with requirements for unimplemente
 - The HTTPS router requires exactly one configured Host on all requests. Pairing POSTs require one exact same-origin Origin and, when supplied, `Sec-Fetch-Site: same-origin` or `none`; all invalid variants fail uniformly before rate limits or pairing state. Forwarded authority metadata is ignored.
 - The HTTPS accept loop holds a semaphore permit for each connection, caps concurrency at 64, limits TLS handshakes to five seconds, and drops excess or stalled connections without plaintext fallback.
 - The optional same-origin UI router serves only canonical files inside an explicit web root, caps each read at 8 MiB, rejects traversal/malformed paths, prevents asset and API misses from reaching SPA fallback, and preserves Host and API authentication policy.
+- Native clients persist the explicitly verified node ID, complete root fingerprint, endpoint hints, and bearer credential only through an isolated protected-store boundary; pin changes require explicit replacement approval.
+- LAN serving is disabled by default, accepts only one explicit private/link-local unicast address, and requires the completed runtime activation audit before an exact TLS-only bind.
 - The future browser UI, API, and media routes share one HTTPS origin. Browser pairing establishes a revocable `HttpOnly`, `Secure`, `SameSite=Strict` session cookie; credentials are not placed in JavaScript storage or media URLs.
-- Client secret storage, remote-browser bootstrap, and LAN activation are not yet implemented.
+- Phase A secure LAN activation is implemented. Physical second-device browser onboarding remains unverified; see [Phase A audit](PHASE_A_SECURITY_AUDIT.md) and [browser trust onboarding](BROWSER_TRUST_ONBOARDING.md).
 
 ### Threat Model
 

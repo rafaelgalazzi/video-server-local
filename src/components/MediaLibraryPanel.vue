@@ -3,6 +3,7 @@ import type { LibraryScan, MediaItem } from '../composables/useMediaLibrary'
 
 defineProps<{
   canPlay: boolean
+  canSelect: boolean
   error: string | null
   isScanning: boolean
   isRestoring: boolean
@@ -40,6 +41,7 @@ function formatSize(bytes: number) {
         </p>
       </div>
       <button
+        v-if="canSelect"
         class="primary-action"
         type="button"
         :disabled="isScanning || isRestoring"

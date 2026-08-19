@@ -77,6 +77,82 @@ impl HttpsRequestPolicy {
             ]),
         }
     }
+
+    fn for_lan(address: SocketAddr, dns_name: Option<&str>) -> Self {
+        let mut hosts = vec![format!("{}:{}", address.ip(), address.port())];
+        let mut origins = vec![format!("https://{}:{}", address.ip(), address.port())];
+        if let Some(name) = dns_name {
+            hosts.push(format!("{}:{}", name.to_ascii_lowercase(), address.port()));
+            origins.push(format!(
+                "https://{}:{}",
+                name.to_ascii_lowercase(),
+                address.port()
+            ));
+        }
+        Self {
+            allowed_hosts: hosts.into(),
+            allowed_origins: origins.into(),
+        }
+    }
+}
+
+pub struct PreparedLanServer {
+    config: crate::lan::LanServerConfig,
+    tls_config: Arc<rustls::ServerConfig>,
+    assets: BrowserAssets,
+}
+
+pub fn prepare_lan_server(
+    identity: &NodeIdentity,
+    lifecycle: &crate::lan::TlsLeafLifecycle,
+    config: crate::lan::LanServerConfig,
+    assets: BrowserAssets,
+) -> Result<PreparedLanServer, HttpsServerError> {
+    if !config.enabled || crate::lan::validate(&config).is_err() {
+        return Err(HttpsServerError::ListenerUnavailable);
+    }
+    let leaf = lifecycle
+        .ensure_current(identity, &config, time::OffsetDateTime::now_utc())
+        .map_err(|_| HttpsServerError::IdentityUnavailable)?;
+    Ok(PreparedLanServer {
+        config,
+        tls_config: leaf.server_config,
+        assets,
+    })
+}
+
+pub async fn activate_lan_server(
+    core: Arc<LocalStreamCore>,
+    prepared: PreparedLanServer,
+    _permit: crate::lan::LanActivationPermit,
+) -> Result<HttpsServerHandle, HttpsServerError> {
+    let address = SocketAddr::new(
+        prepared
+            .config
+            .address
+            .ok_or(HttpsServerError::ListenerUnavailable)?,
+        prepared.config.port,
+    );
+    let listener = TcpListener::bind(address)
+        .await
+        .map_err(|_| HttpsServerError::ListenerUnavailable)?;
+    let bound = listener
+        .local_addr()
+        .map_err(|_| HttpsServerError::ListenerUnavailable)?;
+    let policy = Arc::new(HttpsRequestPolicy::for_lan(
+        bound,
+        prepared.config.dns_name.as_deref(),
+    ));
+    start_https_listener(
+        listener,
+        core,
+        prepared.tls_config,
+        policy,
+        Some(prepared.assets),
+        HttpsLimits::default(),
+        true,
+    )
+    .await
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -844,8 +920,35 @@ async fn start_loopback_https_server_with_options(
         std::net::Ipv6Addr::LOCALHOST.to_string(),
     ])?;
     let tls_config = Arc::new(leaf.into_server_config()?);
-    let tls_acceptor = tokio_rustls::TlsAcceptor::from(tls_config);
     let request_policy = Arc::new(HttpsRequestPolicy::for_loopback(address));
+    start_https_listener(
+        listener,
+        core,
+        tls_config,
+        request_policy,
+        assets,
+        limits,
+        false,
+    )
+    .await
+}
+
+async fn start_https_listener(
+    listener: TcpListener,
+    core: Arc<LocalStreamCore>,
+    tls_config: Arc<rustls::ServerConfig>,
+    request_policy: Arc<HttpsRequestPolicy>,
+    assets: Option<BrowserAssets>,
+    limits: HttpsLimits,
+    lan_available: bool,
+) -> Result<HttpsServerHandle, HttpsServerError> {
+    if limits.max_connections == 0 || limits.handshake_timeout.is_zero() {
+        return Err(HttpsServerError::ListenerUnavailable);
+    }
+    let address = listener
+        .local_addr()
+        .map_err(|_| HttpsServerError::ListenerUnavailable)?;
+    let tls_acceptor = tokio_rustls::TlsAcceptor::from(tls_config);
     let connection_permits = Arc::new(tokio::sync::Semaphore::new(limits.max_connections));
     let (shutdown, mut shutdown_receiver) = tokio::sync::watch::channel(false);
     let task = tokio::spawn(async move {
@@ -870,7 +973,7 @@ async fn start_loopback_https_server_with_options(
                         None => encrypted_router(Arc::clone(&core), request_policy),
                     };
                     let service = hyper_util::service::TowerToHyperService::new(
-                        app.layer(Extension(peer)),
+                        app.layer(Extension(peer)).layer(Extension(LanExposure(lan_available))),
                     );
                     let watcher = graceful.watcher();
                     let mut connection_shutdown = shutdown_receiver.clone();
@@ -906,13 +1009,16 @@ async fn start_loopback_https_server_with_options(
     Ok(HttpsServerHandle {
         info: ServerInfo {
             base_url: format!("https://{address}"),
-            bind_scope: "loopback",
-            lan_available: false,
+            bind_scope: if lan_available { "lan" } else { "loopback" },
+            lan_available,
         },
         shutdown: Some(shutdown),
         task: Some(task),
     })
 }
+
+#[derive(Clone, Copy)]
+struct LanExposure(bool);
 
 fn server_info(address: SocketAddr) -> ServerInfo {
     ServerInfo {
@@ -922,13 +1028,13 @@ fn server_info(address: SocketAddr) -> ServerInfo {
     }
 }
 
-async fn health() -> Json<HealthResponse> {
+async fn health(exposure: Option<Extension<LanExposure>>) -> Json<HealthResponse> {
     Json(HealthResponse {
         service: "LocalStream",
         version: env!("CARGO_PKG_VERSION"),
         status: "ok",
         api_version: "v1",
-        lan_available: false,
+        lan_available: exposure.is_some_and(|Extension(exposure)| exposure.0),
     })
 }
 
@@ -1113,10 +1219,10 @@ mod tests {
     use crate::{auth::TrustedPeer, LocalStreamCore};
 
     use super::{
-        authenticated_router, encrypted_router, encrypted_router_with_assets, require_library_read,
-        router, start_local_server, start_loopback_https_server,
-        start_loopback_https_server_with_assets, start_loopback_https_server_with_limits,
-        BrowserAssets, HttpsLimits, HttpsRequestPolicy,
+        activate_lan_server, authenticated_router, encrypted_router, encrypted_router_with_assets,
+        prepare_lan_server, require_library_read, router, start_local_server,
+        start_loopback_https_server, start_loopback_https_server_with_assets,
+        start_loopback_https_server_with_limits, BrowserAssets, HttpsLimits, HttpsRequestPolicy,
     };
 
     #[derive(Clone, Default)]
@@ -1202,7 +1308,7 @@ mod tests {
         let mut request = Request::builder()
             .method(method)
             .uri(path)
-            .header(header::HOST, format!("localhost:{}", address.port()));
+            .header(header::HOST, format!("{server_name}:{}", address.port()));
         for (name, value) in headers {
             request = request.header(name, value);
         }
@@ -1397,6 +1503,84 @@ mod tests {
         assert_eq!(library_status, StatusCode::UNAUTHORIZED);
         assert_eq!(server.info().bind_scope, "loopback");
         assert!(!server.info().lan_available);
+        server.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn audited_lan_activation_is_tls_only_authenticated_and_explicitly_bound() {
+        let Some(address) = crate::lan::primary_lan_address() else {
+            return;
+        };
+        let probe = std::net::TcpListener::bind((address, 0)).expect("safe address should bind");
+        let port = probe.local_addr().expect("probe address").port();
+        drop(probe);
+        let (_directory, assets) = browser_assets();
+        let identity = test_identity();
+        let core = Arc::new(LocalStreamCore::in_memory().expect("core should open"));
+        let config = crate::lan::LanServerConfig {
+            enabled: true,
+            address: Some(address),
+            port,
+            dns_name: None,
+        };
+        let prepared = prepare_lan_server(
+            &identity,
+            &crate::lan::TlsLeafLifecycle::default(),
+            config,
+            assets,
+        )
+        .expect("LAN server should prepare");
+        let (_, permit) = crate::lan::audit_activation(crate::lan::LanSecurityEvidence {
+            browser_trust_onboarding: true,
+            native_protected_storage: true,
+            negative_security_suite: true,
+        });
+        let server = activate_lan_server(
+            Arc::clone(&core),
+            prepared,
+            permit.expect("audit should permit"),
+        )
+        .await
+        .expect("LAN server should start");
+        let socket = std::net::SocketAddr::new(address, port);
+        let name = address.to_string();
+        let (health, _, body) = https_exchange(
+            socket,
+            identity.root_certificate_der(),
+            &name,
+            Method::GET,
+            "/api/v1/health",
+            Vec::new(),
+            Vec::new(),
+        )
+        .await
+        .expect("LAN health should complete");
+        assert_eq!(health, StatusCode::OK);
+        assert!(String::from_utf8_lossy(&body).contains("\"lanAvailable\":true"));
+        let (library, _) = https_request(
+            socket,
+            identity.root_certificate_der(),
+            &name,
+            "/api/v1/library",
+            None,
+        )
+        .await
+        .expect("LAN auth response should complete");
+        assert_eq!(library, StatusCode::UNAUTHORIZED);
+        let mut plaintext = tokio::net::TcpStream::connect(socket)
+            .await
+            .expect("plaintext connection should open");
+        plaintext
+            .write_all(b"GET / HTTP/1.1\r\nHost: invalid\r\n\r\n")
+            .await
+            .expect("plaintext write");
+        let mut response = [0_u8; 16];
+        let read =
+            tokio::time::timeout(Duration::from_secs(1), plaintext.read(&mut response)).await;
+        assert!(
+            !matches!(read, Ok(Ok(count)) if count > 0 && response[..count].starts_with(b"HTTP/"))
+        );
+        assert_eq!(server.info().bind_scope, "lan");
         server.shutdown().await;
     }
 

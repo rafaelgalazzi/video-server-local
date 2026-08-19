@@ -3,7 +3,9 @@ use thiserror::Error;
 
 pub mod auth;
 mod database;
+pub mod lan;
 pub mod media;
+pub mod native_client;
 pub mod node_identity;
 pub mod server;
 pub mod streaming;

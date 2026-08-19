@@ -6,7 +6,7 @@ Contains reusable Rust domain code with no dependency on Tauri or HTTP transport
 
 ## Features and Interfaces
 
-`lib.rs` defines the core facade. `media/` owns approved-folder scanning and safe result models. `database/` owns SQLite schema, persistence, and restoration. `streaming/` owns safe Direct Play sources. `auth/` owns peer credential lifecycle. `node_identity/` owns private-CA identity and protected storage. `server/` owns Axum adapters and lifecycle.
+`lib.rs` defines the core facade. `media/` owns scanning, `database/` persistence, `streaming/` Direct Play, `auth/` server credentials, `node_identity/` private PKI, `native_client/` protected peer pins, `lan/` endpoint/TLS activation policy, and `server/` Axum adapters and lifecycle.
 
 ## Dependencies
 
