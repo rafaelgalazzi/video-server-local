@@ -81,13 +81,89 @@ Depends on: LS-026, LS-027, LS-030.
 
 Completion evidence: a completed security checklist, real two-device or isolated-network verification, full workspace checks, and updated threat model/API documentation. This is the first task allowed to enable LAN binding.
 
+## Phase A.1 — MKV track support and browser compatibility
+
+This mandatory tranche runs before Phase B. It establishes reliable local playback for MKV files with multiple audio streams and embedded subtitles before discovery adds more transport variables. Existing permanent IDs LS-043 through LS-049 move here without renumbering; LS-069 and LS-070 are the next available permanent IDs.
+
+### LS-043 — FFmpeg tool discovery and process boundary
+
+Define supported ffprobe/ffmpeg acquisition/configuration, validate executables, isolate platform process spawning, bound output/time, support cancellation, and prohibit shell interpolation.
+
+Depends on: LS-031.
+
+Completion evidence: packaging decision, fake-process and hostile filename/argument tests, timeout/cancellation tests, and a real-tool smoke test.
+
+### LS-044 — ffprobe metadata service
+
+Probe and persist normalized container, codec, dimension, duration, disposition, language/title, and complete audio/subtitle stream metadata. One corrupt file must not abort a scan.
+
+Depends on: LS-043.
+
+Completion evidence: fixtures including MKV with dual audio and embedded text/bitmap subtitles, malformed/missing streams, timeout/inaccessible media, and migration/restart tests.
+
+### LS-069 — Audio-track selection
+
+Expose path-free audio metadata and opaque track identifiers, render accessible language/title/default labels, persist safe per-item choices, and apply the selection during Direct Play, remux, or transcode.
+
+Depends on: LS-044.
+
+Completion evidence: core and Vue tests for dual/multiple audio, missing tags, defaults, changed scans, invalid identifiers, and selection retention/reset.
+
+### LS-070 — Embedded subtitle selection
+
+Expose path-free subtitle metadata and accessible Off/default/forced/language choices. Use browser-compatible embedded text tracks directly where possible; otherwise extract, convert, remux, or burn through bounded structured FFmpeg jobs. Bitmap subtitles must fail clearly or use an explicitly supported transform.
+
+Depends on: LS-044.
+
+Completion evidence: fixture/UI/integration tests for common text subtitles, representative bitmap subtitles, forced/default flags, Off state, malformed tracks, cleanup, and language/title labels.
+
+### LS-045 — Direct Play compatibility decisions
+
+Select Direct Play first, then remux, then transcode using container, video codec, selected audio codec, subtitle format/mode, and client capabilities, with an explainable fallback reason.
+
+Depends on: LS-044, LS-069, LS-070.
+
+Completion evidence: decision-table tests for MKV dual-audio/subtitle combinations across representative browser profiles.
+
+### LS-046 — Bounded media job manager
+
+Own transform concurrency, queue limits, deduplication, cancellation, process cleanup, temporary quotas, stale cleanup, and safe progress models.
+
+Depends on: LS-043.
+
+Completion evidence: saturation, cancellation, crash/quota/restart cleanup, and no-orphan-process tests.
+
+### LS-047 — Remux fallback
+
+Stream-copy compatible selected tracks from MKV or other unsupported containers into a browser-compatible container using structured arguments and bounded output.
+
+Depends on: LS-045, LS-046.
+
+Completion evidence: dual-audio/subtitle mapping, output/playability, cancellation, unsupported-input, and resource-limit tests.
+
+### LS-048 — Transcode fallback
+
+Implement bounded video/audio transcoding and subtitle conversion/burn-in profiles for measured browser gaps. Hardware acceleration remains disabled until separately validated.
+
+Depends on: LS-045, LS-046.
+
+Completion evidence: representative MKV outputs, selected-track correctness, subtitle modes, cancellation/concurrency, resource limits, and Direct Play precedence.
+
+### LS-049 — Local playback fallback integration
+
+Integrate track selectors, compatibility decisions, and jobs into local playback with clear progress/error/cancel states and cleanup. Later remote playback must reuse these core decisions.
+
+Depends on: LS-047, LS-048.
+
+Completion evidence: end-to-end MKV Direct Play/remux/transcode tests with dual audio, embedded subtitles, selection changes, and recovery.
+
 ## Phase B — Discovery and native pairing
 
 ### LS-032 — Discovery protocol ADR and service contract
 
 Define the offline mDNS service type, minimal non-secret TXT records, stable-node-ID semantics, endpoint validation, conflict behavior, TTL policy, and trust boundary. Discovery locates nodes but never establishes identity.
 
-Depends on: LS-031.
+Depends on: LS-049.
 
 Completion evidence: accepted ADR, parser/model unit tests, and documented privacy/security limits.
 
@@ -173,63 +249,9 @@ Depends on: LS-037, LS-041.
 
 Completion evidence: deterministic churn tests and an end-to-end two-node interruption/recovery scenario.
 
-## Phase D — Compatibility metadata and FFmpeg fallback
+## Phase D — Adaptive playback decision
 
-### LS-043 — FFmpeg tool discovery and process boundary
-
-Define supported ffprobe/ffmpeg acquisition/configuration, validate executables, isolate platform process spawning, bound output/time, support cancellation, and prohibit shell interpolation.
-
-Depends on: LS-042.
-
-Completion evidence: accepted packaging decision if bundled, fake-process tests, hostile filename/argument tests, timeout/cancellation tests, and real-tool smoke test.
-
-### LS-044 — ffprobe metadata service
-
-Probe media through the safe process boundary and persist normalized container, codecs, dimensions, duration, audio, and subtitle metadata. One corrupt file must not abort a scan.
-
-Depends on: LS-043.
-
-Completion evidence: fixture tests for supported, malformed, missing-stream, timeout, and inaccessible media plus schema migration/restart tests.
-
-### LS-045 — Direct Play compatibility decisions
-
-Define client capability input and a deterministic decision service that selects Direct Play first, then remux, then transcode, with explainable safe results.
-
-Depends on: LS-044.
-
-Completion evidence: decision-table tests across representative browser/platform capability profiles.
-
-### LS-046 — Bounded media job manager
-
-Own transform concurrency, queue limits, deduplication, cancellation, process cleanup, temporary storage quotas, stale cleanup, and safe progress/status models.
-
-Depends on: LS-043.
-
-Completion evidence: concurrency/saturation tests, cancellation and crash cleanup, quota exhaustion, restart cleanup, and no-orphan-process checks.
-
-### LS-047 — Remux fallback
-
-Implement stream-copy remux jobs where codecs are compatible but the container is not, using structured arguments and bounded output streaming.
-
-Depends on: LS-045, LS-046.
-
-Completion evidence: fixture-based output/playability tests, cancellation, unsupported-input, and resource-limit tests.
-
-### LS-048 — Transcode fallback
-
-Implement bounded video/audio transcoding profiles for measured MVP compatibility gaps, with explicit quality/resource policy and hardware acceleration disabled until separately validated.
-
-Depends on: LS-045, LS-046.
-
-Completion evidence: representative output tests, concurrency and cancellation tests, CPU/storage limit behavior, and Direct Play precedence tests.
-
-### LS-049 — Playback fallback integration
-
-Integrate compatibility decisions and jobs into local and remote playback with clear startup/progress/error/cancel states and cleanup when playback stops.
-
-Depends on: LS-047, LS-048.
-
-Completion evidence: end-to-end Direct Play/remux/transcode selection and recovery tests.
+Compatibility metadata, track selection, and progressive FFmpeg fallback moved to mandatory Phase A.1 so reliable MKV playback precedes discovery. This phase retains only the evidence-gated adaptive-streaming decision.
 
 ### LS-050 — Adaptive streaming decision gate
 
@@ -369,7 +391,7 @@ Depends on: LS-060.
 
 ### LS-068 — Product-feature prioritization
 
-Use MVP evidence to prioritize continue-watching, subtitles, music, profiles, casting, TV applications, auto-update, backup/export, and synchronization. Create new permanent LS tasks only for accepted work; honor DD-004 through DD-006.
+Use MVP evidence to prioritize continue-watching, music, profiles, casting, TV applications, auto-update, backup/export, and synchronization. Audio-track and subtitle support are already accepted in mandatory Phase A.1. Create new permanent LS tasks only for other accepted work; honor DD-004 through DD-006.
 
 Depends on: LS-060.
 

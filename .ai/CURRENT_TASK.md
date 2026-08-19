@@ -39,4 +39,4 @@ Complete Phase A by permitting exact-address TLS-only LAN binding only after eve
 
 ## Next Exact Step
 
-After final verification, start LS-032 discovery protocol ADR and service contract.
+Start LS-043 FFmpeg/ffprobe discovery and its safe process boundary for the mandatory pre-Phase-B MKV compatibility tranche.

@@ -6,7 +6,7 @@
 
 ## Current Milestone
 
-Phase A complete: secure explicitly configured LAN web server.
+Phase A.1: MKV track support and browser compatibility before discovery.
 
 ## Working
 
@@ -81,6 +81,6 @@ Phase A complete: secure explicitly configured LAN web server.
 
 ## Next Major Goal
 
-Start Phase B with LS-032 discovery protocol ADR and service contract.
+Start LS-043 FFmpeg/ffprobe discovery and the safe process boundary. Complete MKV dual-audio, subtitle, compatibility, and fallback tasks through LS-049 before Phase B.
 
 The dependency-ordered remaining backlog is maintained in [IMPLEMENTATION_ROADMAP.md](IMPLEMENTATION_ROADMAP.md). The committed completion target is the release-ready desktop LAN MVP through LS-060; post-MVP work is gated and must not silently resolve deferred architecture decisions.

@@ -77,7 +77,7 @@ onUnmounted(() => {
       <p class="eyebrow">Private media. Your network.</p>
       <h1 id="page-title">LocalStream</h1>
       <p class="lede">
-        A local-first home for the media you choose to share—designed to work across your LAN
+        A local-first home for the media you choose to share designed to work across your LAN
         without a cloud account.
       </p>
 
