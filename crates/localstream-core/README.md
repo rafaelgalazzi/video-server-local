@@ -17,6 +17,7 @@ The crate exposes application identity information, scans explicitly approved vi
 - `src/streaming/`: opaque-ID resolution, containment checks, and byte ranges.
 - `src/auth/`: secure peer credentials and bounded user-approved pairing lifecycle.
 - `src/node_identity/`: persistent private-CA identity and protected secret-store boundary.
+- `src/media_tools/`: safe FFmpeg/ffprobe discovery and bounded process execution.
 
 ## Public Interfaces
 

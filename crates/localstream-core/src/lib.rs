@@ -5,6 +5,7 @@ pub mod auth;
 mod database;
 pub mod lan;
 pub mod media;
+pub mod media_tools;
 pub mod native_client;
 pub mod node_identity;
 pub mod server;

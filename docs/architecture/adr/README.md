@@ -30,6 +30,7 @@ Proposed / Accepted / Superseded / Rejected
 
 ## Index
 
+- [ADR-0008 — External FFmpeg process boundary](0008-external-ffmpeg-process-boundary.md)
 - [ADR-0001 — Rust native/core backend](0001-rust-core.md)
 - [ADR-0002 — Vue Composition API state](0002-vue-composition-api-state.md)
 - [ADR-0003 — Axum local HTTP server](0003-axum-local-http-server.md)

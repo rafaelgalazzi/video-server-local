@@ -2,41 +2,37 @@
 
 ## ID
 
-LS-031
+LS-044
 
 ## Title
 
-LAN activation and security gate audit
+ffprobe metadata service
 
 ## Status
 
-Completed
+Not Started
 
 ## Goal
 
-Complete Phase A by permitting exact-address TLS-only LAN binding only after every ADR-0006/ADR-0007 runtime gate, without risking trusted-local desktop startup.
+Probe and persist normalized media/container/track metadata without allowing one corrupt or inaccessible item to abort a library scan.
 
 ## Completed
 
-- LS-025 remote-browser application bootstrap and cookie-only same-origin API selection.
-- LS-026 guarded browser trust onboarding and platform guidance.
-- LS-027 protected native peer pins/credentials with mismatch, replacement, corruption, and deletion behavior.
-- LS-028 disabled-by-default persistent explicit LAN endpoint configuration and safe address filtering/UI.
-- LS-029 stable-root TLS leaf reuse, renewal, and SAN/address rotation.
-- LS-030 fail-closed packaged-assets/identity/TLS/router/session/limit orchestration.
-- LS-031 typed activation audit, exact private-interface binding, and negative security lifecycle coverage.
+- Phase A through LS-031.
+- LS-043 safe FFmpeg/ffprobe discovery and bounded structured process boundary.
 
 ## Verification
 
-- Rust workspace tests, Clippy, checks, and formatting executed.
-- `npm run verify` passed with formatting, lint, typecheck, 36 tests, and the production build.
-- Isolated private-interface TLS lifecycle verified on the development Windows host.
-- Physical second-device browser trust installation was not available for verification.
+- LS-043 unit coverage includes structured hostile arguments, output limits, timeout, cancellation, invalid explicit paths, and installed-tool discovery.
+- Real `ffprobe` and `ffmpeg` discovery executes on the development Windows host.
 
 ## Remaining
 
-- Nothing for Phase A.
+- Implement normalized ffprobe models and parsing.
+- Integrate per-item probing with scan failure isolation.
+- Add schema migration and restart-safe metadata persistence.
+- Add dual-audio, text/bitmap subtitle, malformed, timeout, and inaccessible fixture coverage.
 
 ## Next Exact Step
 
-Start LS-043 FFmpeg/ffprobe discovery and its safe process boundary for the mandatory pre-Phase-B MKV compatibility tranche.
+Implement LS-044 normalized ffprobe models and parser using `media_tools::ProcessRunner`.

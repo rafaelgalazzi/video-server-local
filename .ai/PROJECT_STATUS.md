@@ -2,7 +2,7 @@
 
 ## Last Updated
 
-2026-08-18
+2026-08-19
 
 ## Current Milestone
 
@@ -52,10 +52,11 @@ Phase A.1: MKV track support and browser compatibility before discovery.
 - TLS leaves retain the stable root identity, renew before expiry, and rotate for SAN/address changes.
 - Desktop startup composes packaged UI, identity, TLS, authenticated routes, sessions, limits, and configuration fail-closed while preserving trusted-local startup on LAN failure.
 - Audited activation can bind exactly one private interface only after every Phase A security evidence gate; isolated-interface TLS/auth/downgrade coverage passes.
+- FFmpeg/ffprobe discovery validates configured tools and runs structured no-shell processes with bounded output, timeout, cancellation, and kill-on-drop behavior.
 
 ## In Progress
 
-- Nothing.
+- LS-044 ffprobe metadata service is the next dependency in Phase A.1.
 
 ## Not Started
 
@@ -81,6 +82,6 @@ Phase A.1: MKV track support and browser compatibility before discovery.
 
 ## Next Major Goal
 
-Start LS-043 FFmpeg/ffprobe discovery and the safe process boundary. Complete MKV dual-audio, subtitle, compatibility, and fallback tasks through LS-049 before Phase B.
+Start LS-044 ffprobe metadata and persistence. Complete MKV dual-audio, subtitle, compatibility, and fallback tasks through LS-049 before Phase B.
 
 The dependency-ordered remaining backlog is maintained in [IMPLEMENTATION_ROADMAP.md](IMPLEMENTATION_ROADMAP.md). The committed completion target is the release-ready desktop LAN MVP through LS-060; post-MVP work is gated and must not silently resolve deferred architecture decisions.
