@@ -14,6 +14,7 @@ Discover media inside directories explicitly approved by the user while keeping 
 - Optional bounded ffprobe metadata for container, duration, video, audio, and subtitle streams.
 - Opaque track identifiers and safe per-item `available`, `not_probed`, or `unavailable` status.
 - Corrupt or inaccessible media probe failures remain isolated to one item.
+- Audio preferences use opaque fingerprinted track IDs and reset safely when tracks change.
 
 ## Important Files
 

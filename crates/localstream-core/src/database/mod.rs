@@ -8,7 +8,7 @@ use thiserror::Error;
 
 use crate::media::{LibraryScan, ScannedLibrary};
 
-const SCHEMA_VERSION: i64 = 4;
+const SCHEMA_VERSION: i64 = 5;
 
 #[derive(Debug)]
 pub(crate) struct LibraryDatabase {
@@ -20,6 +20,14 @@ pub(crate) struct MediaLocation {
     pub root_path: PathBuf,
     pub media_path: PathBuf,
     pub extension: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum AudioPreferenceResult {
+    Selected(u32),
+    Cleared,
+    UnknownMedia,
+    InvalidTrack,
 }
 
 #[derive(Debug)]
@@ -106,6 +114,10 @@ impl LibraryDatabase {
                    kind TEXT NOT NULL CHECK (kind IN ('video', 'audio', 'subtitle')),
                    UNIQUE(media_id, source_index)
                  );
+                 CREATE TABLE audio_preferences (
+                   media_id TEXT PRIMARY KEY,
+                   track_id TEXT NOT NULL
+                 );
                  CREATE TABLE app_state (
                    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
                    current_library_id TEXT REFERENCES libraries(id) ON DELETE SET NULL
@@ -128,7 +140,7 @@ impl LibraryDatabase {
                  );
                  CREATE INDEX browser_sessions_peer_id ON browser_sessions(peer_id);
                  INSERT INTO app_state(singleton, current_library_id) VALUES (1, NULL);
-                 PRAGMA user_version = 4;
+                 PRAGMA user_version = 5;
                  COMMIT;",
                 )
                 .map_err(|_| DatabaseError::Unavailable)?,
@@ -173,6 +185,7 @@ impl LibraryDatabase {
                 )
                 .map_err(|_| DatabaseError::Unavailable)?,
             3 => {}
+            4 => {}
             SCHEMA_VERSION => {}
             _ => return Err(DatabaseError::Unavailable),
         }
@@ -191,6 +204,20 @@ impl LibraryDatabase {
                        UNIQUE(media_id, source_index)
                      );
                      PRAGMA user_version = 4;
+                     COMMIT;",
+                )
+                .map_err(|_| DatabaseError::Unavailable)?;
+        }
+
+        if (1..=4).contains(&version) {
+            connection
+                .execute_batch(
+                    "BEGIN IMMEDIATE;
+                     CREATE TABLE audio_preferences (
+                       media_id TEXT PRIMARY KEY,
+                       track_id TEXT NOT NULL
+                     );
+                     PRAGMA user_version = 5;
                      COMMIT;",
                 )
                 .map_err(|_| DatabaseError::Unavailable)?;
@@ -288,6 +315,19 @@ impl LibraryDatabase {
 
         transaction
             .execute(
+                "DELETE FROM audio_preferences
+                 WHERE NOT EXISTS (
+                   SELECT 1 FROM media_tracks
+                   WHERE media_tracks.media_id = audio_preferences.media_id
+                     AND media_tracks.id = audio_preferences.track_id
+                     AND media_tracks.kind = 'audio'
+                 )",
+                [],
+            )
+            .map_err(|_| DatabaseError::Unavailable)?;
+
+        transaction
+            .execute(
                 "UPDATE app_state SET current_library_id = ?1 WHERE singleton = 1",
                 [&library_id],
             )
@@ -323,8 +363,11 @@ impl LibraryDatabase {
 
         let mut statement = connection
             .prepare(
-                "SELECT id, title, extension, size_bytes, metadata_json, probe_status
-                 FROM media_items WHERE library_id = ?1
+                "SELECT media_items.id, title, extension, size_bytes, metadata_json, probe_status,
+                        audio_preferences.track_id
+                 FROM media_items
+                 LEFT JOIN audio_preferences ON audio_preferences.media_id = media_items.id
+                 WHERE library_id = ?1
                  ORDER BY title COLLATE NOCASE, id",
             )
             .map_err(|_| DatabaseError::Unavailable)?;
@@ -355,6 +398,7 @@ impl LibraryDatabase {
                             rusqlite::types::Type::Text,
                         )
                     })?,
+                    selected_audio_track_id: row.get(6)?,
                 })
             })
             .map_err(|_| DatabaseError::Unavailable)?
@@ -391,6 +435,85 @@ impl LibraryDatabase {
                         extension: row.get(2)?,
                     })
                 },
+            )
+            .optional()
+            .map_err(|_| DatabaseError::Unavailable)
+    }
+
+    pub(crate) fn set_audio_preference(
+        &self,
+        media_id: &str,
+        track_id: Option<&str>,
+    ) -> Result<AudioPreferenceResult, DatabaseError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| DatabaseError::Unavailable)?;
+        let media_exists = connection
+            .query_row(
+                "SELECT 1 FROM app_state
+                 JOIN media_items ON media_items.library_id = app_state.current_library_id
+                 WHERE app_state.singleton = 1 AND media_items.id = ?1",
+                [media_id],
+                |_| Ok(()),
+            )
+            .optional()
+            .map_err(|_| DatabaseError::Unavailable)?
+            .is_some();
+        if !media_exists {
+            return Ok(AudioPreferenceResult::UnknownMedia);
+        }
+        let Some(track_id) = track_id else {
+            connection
+                .execute(
+                    "DELETE FROM audio_preferences WHERE media_id = ?1",
+                    [media_id],
+                )
+                .map_err(|_| DatabaseError::Unavailable)?;
+            return Ok(AudioPreferenceResult::Cleared);
+        };
+        let source_index = connection
+            .query_row(
+                "SELECT media_tracks.source_index FROM media_tracks
+                 JOIN media_items ON media_items.id = media_tracks.media_id
+                 JOIN app_state ON app_state.current_library_id = media_items.library_id
+                 WHERE app_state.singleton = 1 AND media_tracks.media_id = ?1
+                   AND media_tracks.id = ?2 AND media_tracks.kind = 'audio'",
+                params![media_id, track_id],
+                |row| row.get::<_, u32>(0),
+            )
+            .optional()
+            .map_err(|_| DatabaseError::Unavailable)?;
+        let Some(source_index) = source_index else {
+            return Ok(AudioPreferenceResult::InvalidTrack);
+        };
+        connection
+            .execute(
+                "INSERT INTO audio_preferences(media_id, track_id) VALUES (?1, ?2)
+                 ON CONFLICT(media_id) DO UPDATE SET track_id = excluded.track_id",
+                params![media_id, track_id],
+            )
+            .map_err(|_| DatabaseError::Unavailable)?;
+        Ok(AudioPreferenceResult::Selected(source_index))
+    }
+
+    pub(crate) fn selected_audio_source_index(
+        &self,
+        media_id: &str,
+    ) -> Result<Option<u32>, DatabaseError> {
+        self.connection
+            .lock()
+            .map_err(|_| DatabaseError::Unavailable)?
+            .query_row(
+                "SELECT media_tracks.source_index FROM audio_preferences
+                 JOIN media_tracks ON media_tracks.media_id = audio_preferences.media_id
+                   AND media_tracks.id = audio_preferences.track_id
+                 JOIN media_items ON media_items.id = media_tracks.media_id
+                 JOIN app_state ON app_state.current_library_id = media_items.library_id
+                 WHERE app_state.singleton = 1 AND audio_preferences.media_id = ?1
+                   AND media_tracks.kind = 'audio'",
+                [media_id],
+                |row| row.get(0),
             )
             .optional()
             .map_err(|_| DatabaseError::Unavailable)
@@ -670,6 +793,33 @@ mod tests {
             .expect_err("newer schema must not be downgraded");
 
         assert!(matches!(error, DatabaseError::Unavailable));
+    }
+
+    #[test]
+    fn migrates_version_four_with_audio_preferences() {
+        let connection = Connection::open_in_memory().expect("database should open");
+        connection
+            .execute_batch(
+                "CREATE TABLE media_items (id TEXT PRIMARY KEY);
+                 PRAGMA user_version = 4;",
+            )
+            .expect("version four schema should be created");
+
+        let database = LibraryDatabase::initialize(connection).expect("database should migrate");
+        let connection = database.connection.lock().expect("database should lock");
+        let table_count: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master
+                 WHERE type = 'table' AND name = 'audio_preferences'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("preference table should query");
+        let version: i64 = connection
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .expect("schema version should load");
+        assert_eq!(table_count, 1);
+        assert_eq!(version, SCHEMA_VERSION);
     }
 
     #[test]

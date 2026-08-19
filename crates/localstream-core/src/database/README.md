@@ -15,6 +15,7 @@ Persist approved libraries and internal media-location records in embedded SQLit
 - Active-peer listing that excludes token digests and revoked records from public core models.
 - Bundled SQLite library; no external database process is required.
 - Schema-v4 normalized media metadata JSON plus private opaque-track-to-source-index mappings.
+- Schema-v5 per-media audio preferences retained only while the fingerprinted track remains valid.
 
 ## Important Files
 

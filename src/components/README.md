@@ -8,7 +8,7 @@ Present accessible UI from typed props and events. Components do not own filesys
 
 - `FoundationStatus.vue` renders native-core availability and retry state.
 - `MediaLibraryPanel.vue` renders folder-selection, scan feedback, empty state, safe media summaries, and API-aware Play actions.
-- `PlaybackPanel.vue` renders the selected title, native video controls, loading/error feedback, and close action.
+- `PlaybackPanel.vue` renders the selected title, native video controls, accessible multi-audio selection, loading/error feedback, and close action.
 - `NodeIdentityPanel.vue` displays the node ID/fingerprint, explains deliberate trust installation, exports the public root, and confirms identity reset.
 - `PairingRequestsPanel.vue` renders safe pending-device metadata, matching-code guidance, expiry, and explicit Allow/Reject actions.
 - `TrustedPeersPanel.vue` renders safe active-device metadata and a distinct revocation confirmation step.

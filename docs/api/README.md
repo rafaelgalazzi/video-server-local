@@ -8,7 +8,9 @@
 
 - `GET /api/v1/library`
 
-  Returns the current path-free `LibraryScan` JSON or `null` when no library exists. Media entries contain opaque `id`, `title`, `extension`, `sizeBytes`, `probeStatus`, and optional `metadata` fields. Available metadata contains normalized container, duration, video dimensions/codec, and complete audio/subtitle track summaries. Track IDs are opaque; source stream indices and filesystem paths are never returned. `probeStatus` is `available`, `not_probed`, or `unavailable`, allowing one corrupt or inaccessible item to remain safely listed without aborting the library scan.
+  Returns the current path-free `LibraryScan` JSON or `null` when no library exists. Media entries contain opaque `id`, `title`, `extension`, `sizeBytes`, `probeStatus`, optional `metadata`, and optional `selectedAudioTrackId` fields. Available metadata contains normalized container, duration, video dimensions/codec, and complete audio/subtitle track summaries. Track IDs are opaque; source stream indices and filesystem paths are never returned. `probeStatus` is `available`, `not_probed`, or `unavailable`, allowing one corrupt or inaccessible item to remain safely listed without aborting the library scan.
+
+Audio preference mutation is currently a trusted-local Tauri command rather than an HTTP route. Adding a cookie-authenticated unsafe browser method requires the project’s CSRF-token gate first. The core validates that the opaque track belongs to the current media item and privately resolves it to the ffprobe source index for later compatibility/remux/transcode decisions.
 
 - `GET /api/v1/media/{id}/stream`
 

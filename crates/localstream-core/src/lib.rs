@@ -22,6 +22,23 @@ pub struct AppInfo {
     pub local_first: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AudioSelection {
+    pub media_id: String,
+    pub selected_track_id: Option<String>,
+}
+
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum AudioSelectionError {
+    #[error("the selected media does not exist in the current library")]
+    UnknownMedia,
+    #[error("the selected audio track does not belong to this media item")]
+    InvalidTrack,
+    #[error("the audio preference store is unavailable")]
+    Unavailable,
+}
+
 #[derive(Debug)]
 pub struct LocalStreamCore {
     database: database::LibraryDatabase,
@@ -137,6 +154,40 @@ impl LocalStreamCore {
 
     pub fn current_library(&self) -> Result<Option<LibraryScan>, DatabaseError> {
         self.database.current_library()
+    }
+
+    pub fn select_audio_track(
+        &self,
+        media_id: &str,
+        track_id: Option<&str>,
+    ) -> Result<AudioSelection, AudioSelectionError> {
+        use database::AudioPreferenceResult;
+
+        match self
+            .database
+            .set_audio_preference(media_id, track_id)
+            .map_err(|_| AudioSelectionError::Unavailable)?
+        {
+            AudioPreferenceResult::Selected(_) => Ok(AudioSelection {
+                media_id: media_id.to_owned(),
+                selected_track_id: track_id.map(str::to_owned),
+            }),
+            AudioPreferenceResult::Cleared => Ok(AudioSelection {
+                media_id: media_id.to_owned(),
+                selected_track_id: None,
+            }),
+            AudioPreferenceResult::UnknownMedia => Err(AudioSelectionError::UnknownMedia),
+            AudioPreferenceResult::InvalidTrack => Err(AudioSelectionError::InvalidTrack),
+        }
+    }
+
+    /// Resolves the persisted opaque choice for internal playback/transform adapters.
+    /// This source index is never included in HTTP or Tauri response models.
+    pub fn selected_audio_source_index(
+        &self,
+        media_id: &str,
+    ) -> Result<Option<u32>, DatabaseError> {
+        self.database.selected_audio_source_index(media_id)
     }
 
     pub async fn open_direct_play(
@@ -461,6 +512,108 @@ mod tests {
             .expect("metadata should survive restart");
         assert_eq!(metadata.audio_tracks.len(), 2);
         assert_eq!(metadata.audio_tracks[1].language.as_deref(), Some("por"));
+    }
+
+    #[test]
+    fn validates_persists_retains_and_resets_audio_preferences() {
+        use crate::media::{
+            AudioTrack, MediaItem, MediaMetadata, ProbeStatus, ScannedLibrary, ScannedMedia,
+            TrackMapping,
+        };
+
+        fn snapshot(root: &std::path::Path, track_id: &str) -> ScannedLibrary {
+            ScannedLibrary {
+                library_name: "Videos".to_owned(),
+                root_path: root.to_path_buf(),
+                skipped_entries: 0,
+                items: vec![ScannedMedia {
+                    path: root.join("Movie.mkv"),
+                    item: MediaItem {
+                        id: "media-1".to_owned(),
+                        title: "Movie".to_owned(),
+                        extension: "mkv".to_owned(),
+                        size_bytes: 42,
+                        probe_status: ProbeStatus::Available,
+                        selected_audio_track_id: None,
+                        metadata: Some(MediaMetadata {
+                            container: "matroska".to_owned(),
+                            duration_millis: Some(1_000),
+                            video: None,
+                            audio_tracks: vec![AudioTrack {
+                                id: track_id.to_owned(),
+                                codec: "aac".to_owned(),
+                                channels: Some(2),
+                                language: None,
+                                title: None,
+                                is_default: true,
+                            }],
+                            subtitle_tracks: Vec::new(),
+                        }),
+                    },
+                    track_mappings: vec![TrackMapping {
+                        id: track_id.to_owned(),
+                        source_index: 3,
+                        kind: "audio",
+                    }],
+                }],
+            }
+        }
+
+        let workspace = tempdir().expect("temporary workspace should exist");
+        let database = workspace.path().join("localstream.sqlite3");
+        let root = workspace.path().join("Videos");
+        fs::create_dir(&root).expect("library should exist");
+        fs::write(root.join("Movie.mkv"), b"media").expect("media should exist");
+        {
+            let core = LocalStreamCore::open(&database).expect("database should open");
+            core.database
+                .replace_library(&snapshot(&root, "audio-stable"))
+                .expect("snapshot should persist");
+            assert_eq!(
+                core.select_audio_track("media-1", Some("missing")),
+                Err(super::AudioSelectionError::InvalidTrack)
+            );
+            core.select_audio_track("media-1", Some("audio-stable"))
+                .expect("valid choice should persist");
+            assert_eq!(
+                core.selected_audio_source_index("media-1").unwrap(),
+                Some(3)
+            );
+            core.database
+                .replace_library(&snapshot(&root, "audio-stable"))
+                .expect("unchanged snapshot should persist");
+            assert_eq!(
+                core.current_library().unwrap().unwrap().items[0]
+                    .selected_audio_track_id
+                    .as_deref(),
+                Some("audio-stable")
+            );
+        }
+
+        let core = LocalStreamCore::open(&database).expect("database should reopen");
+        assert_eq!(
+            core.current_library().unwrap().unwrap().items[0]
+                .selected_audio_track_id
+                .as_deref(),
+            Some("audio-stable")
+        );
+        core.database
+            .replace_library(&snapshot(&root, "audio-changed"))
+            .expect("changed snapshot should persist");
+        assert!(core.current_library().unwrap().unwrap().items[0]
+            .selected_audio_track_id
+            .is_none());
+        assert_eq!(
+            core.select_audio_track("unknown", None),
+            Err(super::AudioSelectionError::UnknownMedia)
+        );
+        core.select_audio_track("media-1", Some("audio-changed"))
+            .expect("new valid choice should persist");
+        core.select_audio_track("media-1", None)
+            .expect("choice should clear");
+        assert!(core.current_library().unwrap().unwrap().items[0]
+            .selected_audio_track_id
+            .is_none());
     }
 
     #[tokio::test]

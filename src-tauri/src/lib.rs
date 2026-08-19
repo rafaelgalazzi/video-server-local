@@ -46,6 +46,16 @@ fn current_library(
 }
 
 #[tauri::command]
+fn select_audio_track(
+    core: tauri::State<'_, Arc<LocalStreamCore>>,
+    media_id: String,
+    track_id: Option<String>,
+) -> Result<localstream_core::AudioSelection, String> {
+    core.select_audio_track(&media_id, track_id.as_deref())
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 fn server_info(
     server: tauri::State<'_, localstream_core::server::ServerHandle>,
 ) -> localstream_core::server::ServerInfo {
@@ -283,6 +293,7 @@ pub fn run() {
             lan_server_status,
             suggested_lan_addresses,
             select_and_scan_library,
+            select_audio_track,
             trusted_peers
         ])
         .run(tauri::generate_context!())

@@ -121,9 +121,9 @@ fn parse_probe_output(media_id: &str, json: &[u8]) -> Result<ProbeResult, ProbeE
         let Some(kind) = stream.codec_type.as_deref() else {
             continue;
         };
-        let id = track_id(media_id, kind, stream.index);
         match kind {
             "video" if video.is_none() => {
+                let id = track_id(media_id, kind, stream.index, &codec, None, None);
                 video = Some(VideoTrack {
                     id: id.clone(),
                     codec,
@@ -137,12 +137,26 @@ fn parse_probe_output(media_id: &str, json: &[u8]) -> Result<ProbeResult, ProbeE
                 });
             }
             "audio" => {
+                let language = clean_label(stream.tags.language);
+                let title = clean_label(stream.tags.title);
+                let fingerprint = format!("{}", stream.channels.unwrap_or_default());
+                let id = track_id(
+                    media_id,
+                    kind,
+                    stream.index,
+                    &codec,
+                    language.as_deref(),
+                    Some(&format!(
+                        "{}:{fingerprint}",
+                        title.as_deref().unwrap_or_default()
+                    )),
+                );
                 audio_tracks.push(AudioTrack {
                     id: id.clone(),
                     codec,
                     channels: stream.channels,
-                    language: clean_label(stream.tags.language),
-                    title: clean_label(stream.tags.title),
+                    language,
+                    title,
                     is_default: stream.disposition.default == 1,
                 });
                 mappings.push(TrackMapping {
@@ -152,12 +166,22 @@ fn parse_probe_output(media_id: &str, json: &[u8]) -> Result<ProbeResult, ProbeE
                 });
             }
             "subtitle" => {
+                let language = clean_label(stream.tags.language);
+                let title = clean_label(stream.tags.title);
+                let id = track_id(
+                    media_id,
+                    kind,
+                    stream.index,
+                    &codec,
+                    language.as_deref(),
+                    title.as_deref(),
+                );
                 let subtitle_kind = classify_subtitle(&codec);
                 subtitle_tracks.push(SubtitleTrack {
                     id: id.clone(),
                     codec,
-                    language: clean_label(stream.tags.language),
-                    title: clean_label(stream.tags.title),
+                    language,
+                    title,
                     is_default: stream.disposition.default == 1,
                     is_forced: stream.disposition.forced == 1,
                     kind: subtitle_kind,
@@ -184,10 +208,22 @@ fn parse_probe_output(media_id: &str, json: &[u8]) -> Result<ProbeResult, ProbeE
     })
 }
 
-fn track_id(media_id: &str, kind: &str, index: u32) -> String {
+fn track_id(
+    media_id: &str,
+    kind: &str,
+    index: u32,
+    codec: &str,
+    language: Option<&str>,
+    detail: Option<&str>,
+) -> String {
     Uuid::new_v5(
         &Uuid::NAMESPACE_OID,
-        format!("{media_id}:{kind}:{index}").as_bytes(),
+        format!(
+            "{media_id}:{kind}:{index}:{codec}:{}:{}",
+            language.unwrap_or_default(),
+            detail.unwrap_or_default()
+        )
+        .as_bytes(),
     )
     .to_string()
 }

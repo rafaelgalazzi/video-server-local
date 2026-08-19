@@ -2,11 +2,11 @@
 
 ## ID
 
-LS-069
+LS-070
 
 ## Title
 
-Audio-track selection
+Embedded subtitle selection
 
 ## Status
 
@@ -14,25 +14,27 @@ Not Started
 
 ## Goal
 
-Expose accessible audio choices, persist safe per-item selections, and apply opaque selected tracks during Direct Play, remux, or transcode decisions.
+Expose accessible Off/default/forced subtitle choices, persist safe per-item preferences, and route text/bitmap selections into browser-compatible delivery decisions.
 
 ## Completed
 
 - Phase A through LS-031.
 - LS-043 safe FFmpeg/ffprobe discovery and process boundary.
-- LS-044 bounded normalized metadata probing, per-item failure isolation, schema-v4 persistence, and restart restoration.
+- LS-044 normalized metadata probing and schema-v4 persistence.
+- LS-069 schema-v5 validated audio preferences, opaque private source-index resolution, rescan retention/reset, and accessible native playback controls.
 
 ## Verification
 
-- Parser fixtures cover dual audio, missing tags/streams, text subtitles, bitmap subtitles, dispositions, and malformed output.
-- A real generated MKV verifies dual-audio/text-subtitle probing, corrupt-file isolation, persistence, and restart restoration when local FFmpeg tools are installed.
+- Core tests cover valid/invalid/unknown selections, clearing, restart persistence, source-index resolution, unchanged rescan retention, and changed-track reset.
+- Vue tests cover default selection, accessible language/title/codec/channel labels, persistence, and unavailable-mode errors.
 
 ## Remaining
 
-- Add per-media audio preference persistence and safe reset behavior.
-- Expose accessible audio labels and selection state in Vue.
-- Resolve opaque track IDs to private ffprobe source indices for later playback decisions.
+- Add Off/default/forced subtitle preference semantics.
+- Persist and validate opaque subtitle selections.
+- Add accessible Vue subtitle controls.
+- Define supported text extraction/conversion and explicit bitmap behavior for compatibility decisions.
 
 ## Next Exact Step
 
-Implement LS-069 persisted audio-track preference APIs and core validation against the current probed item.
+Implement LS-070 subtitle preference models and persistence, including the explicit Off state.

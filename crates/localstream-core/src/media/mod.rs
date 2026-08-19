@@ -16,6 +16,7 @@ pub struct MediaItem {
     pub size_bytes: u64,
     pub metadata: Option<MediaMetadata>,
     pub probe_status: ProbeStatus,
+    pub selected_audio_track_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -193,6 +194,7 @@ pub(crate) fn scan_approved_directory_records(
                 size_bytes: metadata.len(),
                 metadata: None,
                 probe_status: ProbeStatus::NotProbed,
+                selected_audio_track_id: None,
             },
             path: path.to_path_buf(),
             track_mappings: Vec::new(),

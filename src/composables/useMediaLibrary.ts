@@ -8,6 +8,7 @@ export interface MediaItem {
   sizeBytes: number
   metadata: MediaMetadata | null
   probeStatus: 'available' | 'not_probed' | 'unavailable'
+  selectedAudioTrackId: string | null
 }
 
 export interface MediaMetadata {
