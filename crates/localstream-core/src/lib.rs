@@ -38,6 +38,8 @@ pub enum CoreError {
     Scan(#[from] LibraryScanError),
     #[error(transparent)]
     Database(#[from] DatabaseError),
+    #[error(transparent)]
+    MediaTools(#[from] media_tools::ToolDiscoveryError),
 }
 
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -93,6 +95,42 @@ impl LocalStreamCore {
         approved_directory: impl AsRef<std::path::Path>,
     ) -> Result<LibraryScan, CoreError> {
         let scan = media::scan_approved_directory_records(approved_directory.as_ref())?;
+        self.database.replace_library(&scan)?;
+        Ok(scan.public_view())
+    }
+
+    pub async fn scan_and_persist_library_with_probe(
+        &self,
+        approved_directory: impl AsRef<std::path::Path>,
+        cancellation: tokio_util::sync::CancellationToken,
+    ) -> Result<LibraryScan, CoreError> {
+        let ffprobe = media_tools::MediaToolPaths::discover_ffprobe().await?;
+        let mut scan = media::scan_approved_directory_records(approved_directory.as_ref())?;
+        for media in &mut scan.items {
+            match media_tools::probe_media(
+                &ffprobe,
+                &media.item.id,
+                &media.path,
+                cancellation.child_token(),
+            )
+            .await
+            {
+                Ok(probe) => {
+                    media.item.metadata = Some(probe.metadata);
+                    media.item.probe_status = media::ProbeStatus::Available;
+                    media.track_mappings = probe.mappings;
+                }
+                Err(media_tools::ProbeError::Process(media_tools::ProcessError::Cancelled)) => {
+                    return Err(CoreError::MediaTools(
+                        media_tools::ToolDiscoveryError::Unavailable {
+                            tool: "ffprobe",
+                            source: media_tools::ProcessError::Cancelled,
+                        },
+                    ));
+                }
+                Err(_) => media.item.probe_status = media::ProbeStatus::Unavailable,
+            }
+        }
         self.database.replace_library(&scan)?;
         Ok(scan.public_view())
     }
@@ -308,6 +346,121 @@ mod tests {
             .expect("current library should exist");
         assert_eq!(restored.items.len(), 1);
         assert_eq!(restored.items[0].title, "New");
+    }
+
+    #[tokio::test]
+    async fn probes_persists_and_restores_mkv_tracks_while_isolating_corrupt_media() {
+        if std::process::Command::new("ffmpeg")
+            .arg("-version")
+            .output()
+            .is_err()
+            || std::process::Command::new("ffprobe")
+                .arg("-version")
+                .output()
+                .is_err()
+        {
+            return;
+        }
+
+        let workspace = tempdir().expect("temporary workspace should be created");
+        let library = workspace.path().join("Videos");
+        let database = workspace.path().join("localstream.sqlite3");
+        fs::create_dir(&library).expect("library should be created");
+        let subtitles = library.join("captions.srt");
+        fs::write(&subtitles, "1\n00:00:00,000 --> 00:00:00,150\nHello\n")
+            .expect("subtitle fixture should be written");
+        let movie = library.join("Dual Audio.mkv");
+        let generated = std::process::Command::new("ffmpeg")
+            .args([
+                "-v",
+                "error",
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                "color=size=64x64:duration=0.2",
+                "-f",
+                "lavfi",
+                "-i",
+                "sine=frequency=440:duration=0.2",
+                "-f",
+                "lavfi",
+                "-i",
+                "sine=frequency=880:duration=0.2",
+                "-i",
+            ])
+            .arg(&subtitles)
+            .args([
+                "-map",
+                "0:v",
+                "-map",
+                "1:a",
+                "-map",
+                "2:a",
+                "-map",
+                "3:s",
+                "-c:v",
+                "mpeg4",
+                "-c:a",
+                "aac",
+                "-c:s",
+                "srt",
+                "-metadata:s:a:0",
+                "language=eng",
+                "-metadata:s:a:1",
+                "language=por",
+                "-metadata:s:s:0",
+                "language=eng",
+            ])
+            .arg(&movie)
+            .status()
+            .expect("ffmpeg fixture command should start");
+        assert!(generated.success(), "ffmpeg fixture should generate");
+        fs::write(library.join("Corrupt.mkv"), b"not media")
+            .expect("corrupt fixture should be written");
+
+        {
+            let core = LocalStreamCore::open(&database).expect("database should open");
+            let scan = core
+                .scan_and_persist_library_with_probe(
+                    &library,
+                    tokio_util::sync::CancellationToken::new(),
+                )
+                .await
+                .expect("one corrupt item must not abort the scan");
+            assert_eq!(scan.items.len(), 2);
+            let valid = scan
+                .items
+                .iter()
+                .find(|item| item.title == "Dual Audio")
+                .unwrap();
+            let metadata = valid
+                .metadata
+                .as_ref()
+                .expect("metadata should be available");
+            assert_eq!(valid.probe_status, crate::media::ProbeStatus::Available);
+            assert_eq!(metadata.container, "matroska");
+            assert_eq!(metadata.audio_tracks.len(), 2);
+            assert_eq!(metadata.subtitle_tracks.len(), 1);
+            let corrupt = scan
+                .items
+                .iter()
+                .find(|item| item.title == "Corrupt")
+                .unwrap();
+            assert_eq!(corrupt.probe_status, crate::media::ProbeStatus::Unavailable);
+            assert!(corrupt.metadata.is_none());
+        }
+
+        let reopened = LocalStreamCore::open(&database).expect("database should reopen");
+        let restored = reopened.current_library().unwrap().unwrap();
+        let metadata = restored
+            .items
+            .iter()
+            .find(|item| item.title == "Dual Audio")
+            .and_then(|item| item.metadata.as_ref())
+            .expect("metadata should survive restart");
+        assert_eq!(metadata.audio_tracks.len(), 2);
+        assert_eq!(metadata.audio_tracks[1].language.as_deref(), Some("por"));
     }
 
     #[tokio::test]

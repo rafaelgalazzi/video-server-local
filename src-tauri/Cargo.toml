@@ -14,6 +14,7 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 localstream-core = { path = "../crates/localstream-core" }
+tokio-util = { version = "0.7", features = ["rt"] }
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 

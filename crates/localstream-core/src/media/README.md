@@ -11,6 +11,9 @@ Discover media inside directories explicitly approved by the user while keeping 
 - Bounded metadata reads; files are never loaded into memory.
 - Per-entry traversal failures are counted without aborting the entire scan.
 - Directory symlinks are not followed.
+- Optional bounded ffprobe metadata for container, duration, video, audio, and subtitle streams.
+- Opaque track identifiers and safe per-item `available`, `not_probed`, or `unavailable` status.
+- Corrupt or inaccessible media probe failures remain isolated to one item.
 
 ## Important Files
 
@@ -29,8 +32,8 @@ Discover media inside directories explicitly approved by the user while keeping 
 
 ## Current Limitations
 
-Extension matching only identifies candidates. Compatibility, codecs, duration, dimensions, persistence, deletion reconciliation, incremental scanning, audio, and ffprobe metadata are not implemented.
+The standalone synchronous scanner identifies candidates only; the core's async persisted scan adds ffprobe metadata. Compatibility decisions, track preferences, incremental scanning, remuxing, and transcoding are not implemented.
 
 ## Planned Work
 
-Persist internal path-to-ID records in SQLite before exposing media through HTTP or playback routes.
+Add persisted audio/subtitle preferences and compatibility decisions in LS-069, LS-070, and LS-045.

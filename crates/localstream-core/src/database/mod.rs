@@ -8,7 +8,7 @@ use thiserror::Error;
 
 use crate::media::{LibraryScan, ScannedLibrary};
 
-const SCHEMA_VERSION: i64 = 3;
+const SCHEMA_VERSION: i64 = 4;
 
 #[derive(Debug)]
 pub(crate) struct LibraryDatabase {
@@ -95,7 +95,16 @@ impl LibraryDatabase {
                    path TEXT NOT NULL UNIQUE,
                    title TEXT NOT NULL,
                    extension TEXT NOT NULL,
-                   size_bytes INTEGER NOT NULL
+                   size_bytes INTEGER NOT NULL,
+                   metadata_json TEXT,
+                   probe_status TEXT NOT NULL DEFAULT 'not_probed'
+                 );
+                 CREATE TABLE media_tracks (
+                   id TEXT PRIMARY KEY,
+                   media_id TEXT NOT NULL REFERENCES media_items(id) ON DELETE CASCADE,
+                   source_index INTEGER NOT NULL,
+                   kind TEXT NOT NULL CHECK (kind IN ('video', 'audio', 'subtitle')),
+                   UNIQUE(media_id, source_index)
                  );
                  CREATE TABLE app_state (
                    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
@@ -119,7 +128,7 @@ impl LibraryDatabase {
                  );
                  CREATE INDEX browser_sessions_peer_id ON browser_sessions(peer_id);
                  INSERT INTO app_state(singleton, current_library_id) VALUES (1, NULL);
-                 PRAGMA user_version = 3;
+                 PRAGMA user_version = 4;
                  COMMIT;",
                 )
                 .map_err(|_| DatabaseError::Unavailable)?,
@@ -163,8 +172,28 @@ impl LibraryDatabase {
                      COMMIT;",
                 )
                 .map_err(|_| DatabaseError::Unavailable)?,
+            3 => {}
             SCHEMA_VERSION => {}
             _ => return Err(DatabaseError::Unavailable),
+        }
+
+        if (1..=3).contains(&version) {
+            connection
+                .execute_batch(
+                    "BEGIN IMMEDIATE;
+                     ALTER TABLE media_items ADD COLUMN metadata_json TEXT;
+                     ALTER TABLE media_items ADD COLUMN probe_status TEXT NOT NULL DEFAULT 'not_probed';
+                     CREATE TABLE media_tracks (
+                       id TEXT PRIMARY KEY,
+                       media_id TEXT NOT NULL REFERENCES media_items(id) ON DELETE CASCADE,
+                       source_index INTEGER NOT NULL,
+                       kind TEXT NOT NULL CHECK (kind IN ('video', 'audio', 'subtitle')),
+                       UNIQUE(media_id, source_index)
+                     );
+                     PRAGMA user_version = 4;
+                     COMMIT;",
+                )
+                .map_err(|_| DatabaseError::Unavailable)?;
         }
 
         Ok(Self {
@@ -209,8 +238,9 @@ impl LibraryDatabase {
         {
             let mut statement = transaction
                 .prepare(
-                    "INSERT INTO media_items(id, library_id, path, title, extension, size_bytes)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                    "INSERT INTO media_items(
+                       id, library_id, path, title, extension, size_bytes, metadata_json, probe_status
+                     ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
                 )
                 .map_err(|_| DatabaseError::Unavailable)?;
             for media in &scan.items {
@@ -222,8 +252,37 @@ impl LibraryDatabase {
                         media.item.title,
                         media.item.extension,
                         media.item.size_bytes,
+                        media
+                            .item
+                            .metadata
+                            .as_ref()
+                            .map(serde_json::to_string)
+                            .transpose()
+                            .map_err(|_| DatabaseError::InvalidText)?,
+                        probe_status_name(media.item.probe_status),
                     ])
                     .map_err(|_| DatabaseError::Unavailable)?;
+            }
+        }
+
+        {
+            let mut statement = transaction
+                .prepare(
+                    "INSERT INTO media_tracks(id, media_id, source_index, kind)
+                     VALUES (?1, ?2, ?3, ?4)",
+                )
+                .map_err(|_| DatabaseError::Unavailable)?;
+            for media in &scan.items {
+                for mapping in &media.track_mappings {
+                    statement
+                        .execute(params![
+                            mapping.id,
+                            media.item.id,
+                            mapping.source_index,
+                            mapping.kind
+                        ])
+                        .map_err(|_| DatabaseError::Unavailable)?;
+                }
             }
         }
 
@@ -264,18 +323,38 @@ impl LibraryDatabase {
 
         let mut statement = connection
             .prepare(
-                "SELECT id, title, extension, size_bytes
+                "SELECT id, title, extension, size_bytes, metadata_json, probe_status
                  FROM media_items WHERE library_id = ?1
                  ORDER BY title COLLATE NOCASE, id",
             )
             .map_err(|_| DatabaseError::Unavailable)?;
         let items = statement
             .query_map([library_id], |row| {
+                let metadata_json: Option<String> = row.get(4)?;
+                let metadata = metadata_json
+                    .map(|json| serde_json::from_str(&json))
+                    .transpose()
+                    .map_err(|error| {
+                        rusqlite::Error::FromSqlConversionFailure(
+                            4,
+                            rusqlite::types::Type::Text,
+                            Box::new(error),
+                        )
+                    })?;
+                let status: String = row.get(5)?;
                 Ok(crate::media::MediaItem {
                     id: row.get(0)?,
                     title: row.get(1)?,
                     extension: row.get(2)?,
                     size_bytes: row.get(3)?,
+                    metadata,
+                    probe_status: parse_probe_status(&status).ok_or_else(|| {
+                        rusqlite::Error::InvalidColumnType(
+                            5,
+                            "probe_status".to_owned(),
+                            rusqlite::types::Type::Text,
+                        )
+                    })?,
                 })
             })
             .map_err(|_| DatabaseError::Unavailable)?
@@ -539,6 +618,23 @@ impl LibraryDatabase {
             .commit()
             .map_err(|_| DatabaseError::Unavailable)?;
         Ok(changed)
+    }
+}
+
+fn probe_status_name(status: crate::media::ProbeStatus) -> &'static str {
+    match status {
+        crate::media::ProbeStatus::Available => "available",
+        crate::media::ProbeStatus::NotProbed => "not_probed",
+        crate::media::ProbeStatus::Unavailable => "unavailable",
+    }
+}
+
+fn parse_probe_status(value: &str) -> Option<crate::media::ProbeStatus> {
+    match value {
+        "available" => Some(crate::media::ProbeStatus::Available),
+        "not_probed" => Some(crate::media::ProbeStatus::NotProbed),
+        "unavailable" => Some(crate::media::ProbeStatus::Unavailable),
+        _ => None,
     }
 }
 

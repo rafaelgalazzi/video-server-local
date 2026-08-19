@@ -53,26 +53,27 @@ Phase A.1: MKV track support and browser compatibility before discovery.
 - Desktop startup composes packaged UI, identity, TLS, authenticated routes, sessions, limits, and configuration fail-closed while preserving trusted-local startup on LAN failure.
 - Audited activation can bind exactly one private interface only after every Phase A security evidence gate; isolated-interface TLS/auth/downgrade coverage passes.
 - FFmpeg/ffprobe discovery validates configured tools and runs structured no-shell processes with bounded output, timeout, cancellation, and kill-on-drop behavior.
+- Async persisted scans probe normalized container, duration, video, complete audio, and text/bitmap subtitle metadata; corrupt items fail individually, opaque track mappings remain private, and schema-v4 metadata survives restart.
 
 ## In Progress
 
-- LS-044 ffprobe metadata service is the next dependency in Phase A.1.
+- LS-069 audio-track selection is the next dependency in Phase A.1.
 
 ## Not Started
 
 - Node discovery, pairing, trust, and distributed libraries.
-- FFmpeg probing/transcoding and concurrency management.
+- FFmpeg remux/transcoding and transform concurrency management.
 - Automated tests, CI, packaging, and platform verification.
 
 ## Known Major Limitations
 
 - Release bundling and installer behavior is unknown / not verified.
 - The current local Node.js 22.12 environment is below one transitive lint dependency's declared minimum of 22.13, although verification executed successfully.
-- Scans are extension-based; compatibility metadata is not inspected.
+- The standalone scanner remains extension-based; desktop persisted scans inspect compatibility metadata with ffprobe.
 - Rescans replace the full stored snapshot rather than updating incrementally.
 - HTTP and Direct Play are loopback-only on an ephemeral port until pairing/authentication is implemented.
 - Direct Play supports one byte range per request; multipart ranges and conditional caching are not implemented.
-- Playback compatibility is delegated to the embedded browser; ffprobe metadata and transcoding fallback are not implemented.
+- Playback compatibility is still delegated to the embedded browser; compatibility decisions and transcoding fallback are not implemented.
 - Pairing requests are intentionally memory-only and disappear on restart.
 - Native client secret storage is not implemented.
 - Physical second-device certificate installation, browser onboarding, and playback are not verified.
@@ -82,6 +83,6 @@ Phase A.1: MKV track support and browser compatibility before discovery.
 
 ## Next Major Goal
 
-Start LS-044 ffprobe metadata and persistence. Complete MKV dual-audio, subtitle, compatibility, and fallback tasks through LS-049 before Phase B.
+Start LS-069 persisted audio-track selection. Complete subtitle selection, compatibility, and fallback tasks through LS-049 before Phase B.
 
 The dependency-ordered remaining backlog is maintained in [IMPLEMENTATION_ROADMAP.md](IMPLEMENTATION_ROADMAP.md). The committed completion target is the release-ready desktop LAN MVP through LS-060; post-MVP work is gated and must not silently resolve deferred architecture decisions.

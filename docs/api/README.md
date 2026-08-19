@@ -8,7 +8,7 @@
 
 - `GET /api/v1/library`
 
-  Returns the current path-free `LibraryScan` JSON or `null` when no library exists. Media entries contain opaque `id`, `title`, `extension`, and `sizeBytes` fields.
+  Returns the current path-free `LibraryScan` JSON or `null` when no library exists. Media entries contain opaque `id`, `title`, `extension`, `sizeBytes`, `probeStatus`, and optional `metadata` fields. Available metadata contains normalized container, duration, video dimensions/codec, and complete audio/subtitle track summaries. Track IDs are opaque; source stream indices and filesystem paths are never returned. `probeStatus` is `available`, `not_probed`, or `unavailable`, allowing one corrupt or inaccessible item to remain safely listed without aborting the library scan.
 
 - `GET /api/v1/media/{id}/stream`
 

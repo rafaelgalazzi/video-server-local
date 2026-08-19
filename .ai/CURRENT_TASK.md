@@ -2,11 +2,11 @@
 
 ## ID
 
-LS-044
+LS-069
 
 ## Title
 
-ffprobe metadata service
+Audio-track selection
 
 ## Status
 
@@ -14,25 +14,25 @@ Not Started
 
 ## Goal
 
-Probe and persist normalized media/container/track metadata without allowing one corrupt or inaccessible item to abort a library scan.
+Expose accessible audio choices, persist safe per-item selections, and apply opaque selected tracks during Direct Play, remux, or transcode decisions.
 
 ## Completed
 
 - Phase A through LS-031.
-- LS-043 safe FFmpeg/ffprobe discovery and bounded structured process boundary.
+- LS-043 safe FFmpeg/ffprobe discovery and process boundary.
+- LS-044 bounded normalized metadata probing, per-item failure isolation, schema-v4 persistence, and restart restoration.
 
 ## Verification
 
-- LS-043 unit coverage includes structured hostile arguments, output limits, timeout, cancellation, invalid explicit paths, and installed-tool discovery.
-- Real `ffprobe` and `ffmpeg` discovery executes on the development Windows host.
+- Parser fixtures cover dual audio, missing tags/streams, text subtitles, bitmap subtitles, dispositions, and malformed output.
+- A real generated MKV verifies dual-audio/text-subtitle probing, corrupt-file isolation, persistence, and restart restoration when local FFmpeg tools are installed.
 
 ## Remaining
 
-- Implement normalized ffprobe models and parsing.
-- Integrate per-item probing with scan failure isolation.
-- Add schema migration and restart-safe metadata persistence.
-- Add dual-audio, text/bitmap subtitle, malformed, timeout, and inaccessible fixture coverage.
+- Add per-media audio preference persistence and safe reset behavior.
+- Expose accessible audio labels and selection state in Vue.
+- Resolve opaque track IDs to private ffprobe source indices for later playback decisions.
 
 ## Next Exact Step
 
-Implement LS-044 normalized ffprobe models and parser using `media_tools::ProcessRunner`.
+Implement LS-069 persisted audio-track preference APIs and core validation against the current probed item.

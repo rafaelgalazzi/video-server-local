@@ -14,6 +14,7 @@ Persist approved libraries and internal media-location records in embedded SQLit
 - Bulk peer revocation used before destructive node-identity reset.
 - Active-peer listing that excludes token digests and revoked records from public core models.
 - Bundled SQLite library; no external database process is required.
+- Schema-v4 normalized media metadata JSON plus private opaque-track-to-source-index mappings.
 
 ## Important Files
 

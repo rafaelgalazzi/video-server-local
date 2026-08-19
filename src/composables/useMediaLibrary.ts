@@ -6,6 +6,42 @@ export interface MediaItem {
   title: string
   extension: string
   sizeBytes: number
+  metadata: MediaMetadata | null
+  probeStatus: 'available' | 'not_probed' | 'unavailable'
+}
+
+export interface MediaMetadata {
+  container: string
+  durationMillis: number | null
+  video: VideoTrack | null
+  audioTracks: AudioTrack[]
+  subtitleTracks: SubtitleTrack[]
+}
+
+export interface VideoTrack {
+  id: string
+  codec: string
+  width: number | null
+  height: number | null
+}
+
+export interface AudioTrack {
+  id: string
+  codec: string
+  channels: number | null
+  language: string | null
+  title: string | null
+  isDefault: boolean
+}
+
+export interface SubtitleTrack {
+  id: string
+  codec: string
+  language: string | null
+  title: string | null
+  isDefault: boolean
+  isForced: boolean
+  kind: 'text' | 'bitmap' | 'unknown'
 }
 
 export interface LibraryScan {

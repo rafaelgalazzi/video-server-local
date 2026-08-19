@@ -14,4 +14,4 @@ Axum, Tokio, rusqlite with bundled SQLite, Serde, walkdir, UUID, OS randomness, 
 
 ## Current Limitations and Planned Work
 
-Scanning identifies candidates by extension, and pairing has no remote protocol or approval flow. Add responsibility-focused modules as vertical product slices require them.
+The standalone scanner identifies candidates by extension; desktop persisted scans add bounded ffprobe metadata. Compatibility decisions, track preferences, and media transforms remain planned. Add responsibility-focused modules as vertical product slices require them.

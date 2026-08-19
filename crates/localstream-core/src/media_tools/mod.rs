@@ -9,6 +9,10 @@ use thiserror::Error;
 use tokio::{io::AsyncReadExt, process::Command};
 use tokio_util::sync::CancellationToken;
 
+mod probe;
+pub(crate) use probe::probe_media;
+pub use probe::ProbeError;
+
 pub const FFPROBE_PATH_ENV: &str = "LOCALSTREAM_FFPROBE_PATH";
 pub const FFMPEG_PATH_ENV: &str = "LOCALSTREAM_FFMPEG_PATH";
 const VERSION_OUTPUT_LIMIT: usize = 64 * 1024;
@@ -21,6 +25,12 @@ pub struct MediaToolPaths {
 }
 
 impl MediaToolPaths {
+    pub async fn discover_ffprobe() -> Result<PathBuf, ToolDiscoveryError> {
+        let ffprobe = configured_tool(std::env::var_os(FFPROBE_PATH_ENV), "ffprobe")?;
+        validate_tool(&ffprobe, "ffprobe").await?;
+        Ok(ffprobe)
+    }
+
     pub async fn discover() -> Result<Self, ToolDiscoveryError> {
         Self::discover_with(
             std::env::var_os(FFPROBE_PATH_ENV),

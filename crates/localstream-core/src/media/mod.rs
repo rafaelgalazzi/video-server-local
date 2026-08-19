@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uuid::Uuid;
 use walkdir::WalkDir;
@@ -14,6 +14,67 @@ pub struct MediaItem {
     pub title: String,
     pub extension: String,
     pub size_bytes: u64,
+    pub metadata: Option<MediaMetadata>,
+    pub probe_status: ProbeStatus,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProbeStatus {
+    Available,
+    #[default]
+    NotProbed,
+    Unavailable,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MediaMetadata {
+    pub container: String,
+    pub duration_millis: Option<u64>,
+    pub video: Option<VideoTrack>,
+    pub audio_tracks: Vec<AudioTrack>,
+    pub subtitle_tracks: Vec<SubtitleTrack>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VideoTrack {
+    pub id: String,
+    pub codec: String,
+    pub width: Option<u32>,
+    pub height: Option<u32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AudioTrack {
+    pub id: String,
+    pub codec: String,
+    pub channels: Option<u16>,
+    pub language: Option<String>,
+    pub title: Option<String>,
+    pub is_default: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SubtitleTrack {
+    pub id: String,
+    pub codec: String,
+    pub language: Option<String>,
+    pub title: Option<String>,
+    pub is_default: bool,
+    pub is_forced: bool,
+    pub kind: SubtitleKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SubtitleKind {
+    Text,
+    Bitmap,
+    Unknown,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -28,6 +89,14 @@ pub struct LibraryScan {
 pub(crate) struct ScannedMedia {
     pub item: MediaItem,
     pub path: PathBuf,
+    pub track_mappings: Vec<TrackMapping>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct TrackMapping {
+    pub id: String,
+    pub source_index: u32,
+    pub kind: &'static str,
 }
 
 #[derive(Debug)]
@@ -122,8 +191,11 @@ pub(crate) fn scan_approved_directory_records(
                 title,
                 extension,
                 size_bytes: metadata.len(),
+                metadata: None,
+                probe_status: ProbeStatus::NotProbed,
             },
             path: path.to_path_buf(),
+            track_mappings: Vec::new(),
         });
     }
 

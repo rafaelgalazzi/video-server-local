@@ -28,9 +28,14 @@ fn select_and_scan_library(
         .into_path()
         .map_err(|_| "the selected folder is not a local filesystem path".to_owned())?;
 
-    core.scan_and_persist_library(directory)
-        .map(Some)
-        .map_err(|error| error.to_string())
+    tauri::async_runtime::block_on(
+        core.scan_and_persist_library_with_probe(
+            directory,
+            tokio_util::sync::CancellationToken::new(),
+        ),
+    )
+    .map(Some)
+    .map_err(|error| error.to_string())
 }
 
 #[tauri::command]

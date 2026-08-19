@@ -14,6 +14,7 @@ Discover and invoke FFmpeg tools without shell interpolation while keeping proce
 ## Important Files
 
 - `mod.rs`: discovery models, process runner, safe errors, and boundary tests.
+- `probe.rs`: bounded ffprobe invocation and normalized path-free metadata parsing.
 
 ## Public Interfaces
 
@@ -31,4 +32,4 @@ Release packaging does not yet bundle FFmpeg. Operators must install compatible 
 
 ## Planned Work
 
-LS-044 will consume this boundary for normalized ffprobe metadata. LS-046 will add transform queues, quotas, deduplication, and stale-job cleanup.
+LS-046 will add transform queues, quotas, deduplication, and stale-job cleanup.

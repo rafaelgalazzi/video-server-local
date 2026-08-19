@@ -16,6 +16,7 @@ rcgen = { version = "=0.14.7", features = ["zeroize"] }
 rusqlite = { version = "0.37", features = ["bundled"] }
 rustls = { version = "=0.23.37", default-features = false, features = ["ring", "std", "tls12"] }
 serde.workspace = true
+serde_json = "1"
 sha2 = "0.10"
 subtle = "2"
 thiserror = "2"
@@ -28,7 +29,6 @@ walkdir = "2"
 
 [dev-dependencies]
 http-body-util = "0.1"
-serde_json = "1"
 tempfile = "3"
 tower = { version = "0.5", features = ["util"] }
 x509-parser = { version = "=0.18.1", features = ["verify"] }

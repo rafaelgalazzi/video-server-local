@@ -38,7 +38,7 @@ Axum and Tokio for the embedded server, bundled SQLite through rusqlite, Serde f
 
 ## Current Limitations
 
-Remote pairing routes, TLS/leaf issuance, root-trust installation, LAN binding, compatibility inspection, audio, discovery, and FFmpeg services are not implemented. Node identity is not yet connected to application startup, and headless protected storage needs a separately reviewed adapter. The in-memory pairing and credential core must not be used over plaintext LAN HTTP. Direct Play supports single byte ranges and eight concurrent loopback streams. Rescans currently replace a complete library snapshot.
+Compatibility decisions, track preferences, remux/transcode fallback, discovery, and headless protected storage are not implemented. Direct Play supports single byte ranges and eight concurrent streams. Rescans replace a complete library snapshot, and release packaging does not yet bundle FFmpeg tools.
 
 ## Planned Work
 
