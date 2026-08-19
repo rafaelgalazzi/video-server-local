@@ -16,6 +16,7 @@ Persist approved libraries and internal media-location records in embedded SQLit
 - Bundled SQLite library; no external database process is required.
 - Schema-v4 normalized media metadata JSON plus private opaque-track-to-source-index mappings.
 - Schema-v5 per-media audio preferences retained only while the fingerprinted track remains valid.
+- Schema-v6 subtitle preferences with distinct Automatic, Off, and validated-track semantics.
 
 ## Important Files
 

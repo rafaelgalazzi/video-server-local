@@ -12,6 +12,7 @@ Expose versioned HTTP adapters backed by the reusable Rust core while keeping se
 - `GET /api/v1/library` path-free current-library response.
 - Stable JSON error envelope.
 - Opaque-ID Direct Play route with full and single-range responses.
+- Authenticated-safe bounded WebVTT extraction for validated embedded text subtitle tracks.
 - Separate authenticated-router policy with strict bearer parsing and `library.read` enforcement.
 - Separate loopback-only HTTPS lifecycle using node-issued Rustls configuration and graceful shutdown.
 - HTTPS-only rate-limited pairing request/claim routes backed by the existing local approval service.

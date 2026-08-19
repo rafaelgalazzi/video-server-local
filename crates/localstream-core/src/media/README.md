@@ -15,6 +15,7 @@ Discover media inside directories explicitly approved by the user while keeping 
 - Opaque track identifiers and safe per-item `available`, `not_probed`, or `unavailable` status.
 - Corrupt or inaccessible media probe failures remain isolated to one item.
 - Audio preferences use opaque fingerprinted track IDs and reset safely when tracks change.
+- Subtitle preferences preserve explicit Off, choose forced/default tracks automatically, and reset stale track IDs.
 
 ## Important Files
 

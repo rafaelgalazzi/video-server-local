@@ -8,7 +8,7 @@ use thiserror::Error;
 
 use crate::media::{LibraryScan, ScannedLibrary};
 
-const SCHEMA_VERSION: i64 = 5;
+const SCHEMA_VERSION: i64 = 6;
 
 #[derive(Debug)]
 pub(crate) struct LibraryDatabase {
@@ -28,6 +28,21 @@ pub(crate) enum AudioPreferenceResult {
     Cleared,
     UnknownMedia,
     InvalidTrack,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum SubtitlePreferenceResult {
+    Saved,
+    UnknownMedia,
+    InvalidTrack,
+}
+
+#[derive(Debug)]
+pub(crate) struct SubtitleSourceRecord {
+    pub root_path: PathBuf,
+    pub media_path: PathBuf,
+    pub source_index: u32,
+    pub metadata_json: String,
 }
 
 #[derive(Debug)]
@@ -118,6 +133,13 @@ impl LibraryDatabase {
                    media_id TEXT PRIMARY KEY,
                    track_id TEXT NOT NULL
                  );
+                 CREATE TABLE subtitle_preferences (
+                   media_id TEXT PRIMARY KEY,
+                   mode TEXT NOT NULL CHECK (mode IN ('off', 'track')),
+                   track_id TEXT,
+                   CHECK ((mode = 'off' AND track_id IS NULL) OR
+                          (mode = 'track' AND track_id IS NOT NULL))
+                 );
                  CREATE TABLE app_state (
                    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
                    current_library_id TEXT REFERENCES libraries(id) ON DELETE SET NULL
@@ -140,7 +162,7 @@ impl LibraryDatabase {
                  );
                  CREATE INDEX browser_sessions_peer_id ON browser_sessions(peer_id);
                  INSERT INTO app_state(singleton, current_library_id) VALUES (1, NULL);
-                 PRAGMA user_version = 5;
+                 PRAGMA user_version = 6;
                  COMMIT;",
                 )
                 .map_err(|_| DatabaseError::Unavailable)?,
@@ -186,6 +208,7 @@ impl LibraryDatabase {
                 .map_err(|_| DatabaseError::Unavailable)?,
             3 => {}
             4 => {}
+            5 => {}
             SCHEMA_VERSION => {}
             _ => return Err(DatabaseError::Unavailable),
         }
@@ -223,6 +246,23 @@ impl LibraryDatabase {
                 .map_err(|_| DatabaseError::Unavailable)?;
         }
 
+        if (1..=5).contains(&version) {
+            connection
+                .execute_batch(
+                    "BEGIN IMMEDIATE;
+                     CREATE TABLE subtitle_preferences (
+                       media_id TEXT PRIMARY KEY,
+                       mode TEXT NOT NULL CHECK (mode IN ('off', 'track')),
+                       track_id TEXT,
+                       CHECK ((mode = 'off' AND track_id IS NULL) OR
+                              (mode = 'track' AND track_id IS NOT NULL))
+                     );
+                     PRAGMA user_version = 6;
+                     COMMIT;",
+                )
+                .map_err(|_| DatabaseError::Unavailable)?;
+        }
+
         Ok(Self {
             connection: Mutex::new(connection),
         })
@@ -255,6 +295,7 @@ impl LibraryDatabase {
                 ],
             )
             .map_err(|_| DatabaseError::Unavailable)?;
+
         transaction
             .execute(
                 "DELETE FROM media_items WHERE library_id = ?1",
@@ -328,6 +369,22 @@ impl LibraryDatabase {
 
         transaction
             .execute(
+                "DELETE FROM subtitle_preferences
+                 WHERE NOT EXISTS (
+                   SELECT 1 FROM media_items
+                   WHERE media_items.id = subtitle_preferences.media_id
+                 ) OR (mode = 'track' AND NOT EXISTS (
+                   SELECT 1 FROM media_tracks
+                   WHERE media_tracks.media_id = subtitle_preferences.media_id
+                     AND media_tracks.id = subtitle_preferences.track_id
+                     AND media_tracks.kind = 'subtitle'
+                 ))",
+                [],
+            )
+            .map_err(|_| DatabaseError::Unavailable)?;
+
+        transaction
+            .execute(
                 "UPDATE app_state SET current_library_id = ?1 WHERE singleton = 1",
                 [&library_id],
             )
@@ -364,9 +421,11 @@ impl LibraryDatabase {
         let mut statement = connection
             .prepare(
                 "SELECT media_items.id, title, extension, size_bytes, metadata_json, probe_status,
-                        audio_preferences.track_id
+                        audio_preferences.track_id, subtitle_preferences.mode,
+                        subtitle_preferences.track_id
                  FROM media_items
                  LEFT JOIN audio_preferences ON audio_preferences.media_id = media_items.id
+                 LEFT JOIN subtitle_preferences ON subtitle_preferences.media_id = media_items.id
                  WHERE library_id = ?1
                  ORDER BY title COLLATE NOCASE, id",
             )
@@ -399,6 +458,19 @@ impl LibraryDatabase {
                         )
                     })?,
                     selected_audio_track_id: row.get(6)?,
+                    subtitle_mode: match row.get::<_, Option<String>>(7)?.as_deref() {
+                        None => crate::media::SubtitleMode::Automatic,
+                        Some("off") => crate::media::SubtitleMode::Off,
+                        Some("track") => crate::media::SubtitleMode::Track,
+                        Some(_) => {
+                            return Err(rusqlite::Error::InvalidColumnType(
+                                7,
+                                "subtitle_mode".to_owned(),
+                                rusqlite::types::Type::Text,
+                            ))
+                        }
+                    },
+                    selected_subtitle_track_id: row.get(8)?,
                 })
             })
             .map_err(|_| DatabaseError::Unavailable)?
@@ -514,6 +586,113 @@ impl LibraryDatabase {
                    AND media_tracks.kind = 'audio'",
                 [media_id],
                 |row| row.get(0),
+            )
+            .optional()
+            .map_err(|_| DatabaseError::Unavailable)
+    }
+
+    pub(crate) fn set_subtitle_preference(
+        &self,
+        media_id: &str,
+        mode: crate::media::SubtitleMode,
+        track_id: Option<&str>,
+    ) -> Result<SubtitlePreferenceResult, DatabaseError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| DatabaseError::Unavailable)?;
+        let media_exists = connection
+            .query_row(
+                "SELECT 1 FROM app_state
+                 JOIN media_items ON media_items.library_id = app_state.current_library_id
+                 WHERE app_state.singleton = 1 AND media_items.id = ?1",
+                [media_id],
+                |_| Ok(()),
+            )
+            .optional()
+            .map_err(|_| DatabaseError::Unavailable)?
+            .is_some();
+        if !media_exists {
+            return Ok(SubtitlePreferenceResult::UnknownMedia);
+        }
+        match mode {
+            crate::media::SubtitleMode::Automatic => {
+                connection
+                    .execute(
+                        "DELETE FROM subtitle_preferences WHERE media_id = ?1",
+                        [media_id],
+                    )
+                    .map_err(|_| DatabaseError::Unavailable)?;
+            }
+            crate::media::SubtitleMode::Off => {
+                connection
+                    .execute(
+                        "INSERT INTO subtitle_preferences(media_id, mode, track_id)
+                         VALUES (?1, 'off', NULL)
+                         ON CONFLICT(media_id) DO UPDATE SET mode = 'off', track_id = NULL",
+                        [media_id],
+                    )
+                    .map_err(|_| DatabaseError::Unavailable)?;
+            }
+            crate::media::SubtitleMode::Track => {
+                let Some(track_id) = track_id else {
+                    return Ok(SubtitlePreferenceResult::InvalidTrack);
+                };
+                let valid = connection
+                    .query_row(
+                        "SELECT 1 FROM media_tracks
+                         JOIN media_items ON media_items.id = media_tracks.media_id
+                         JOIN app_state ON app_state.current_library_id = media_items.library_id
+                         WHERE app_state.singleton = 1 AND media_tracks.media_id = ?1
+                           AND media_tracks.id = ?2 AND media_tracks.kind = 'subtitle'",
+                        params![media_id, track_id],
+                        |_| Ok(()),
+                    )
+                    .optional()
+                    .map_err(|_| DatabaseError::Unavailable)?
+                    .is_some();
+                if !valid {
+                    return Ok(SubtitlePreferenceResult::InvalidTrack);
+                }
+                connection
+                    .execute(
+                        "INSERT INTO subtitle_preferences(media_id, mode, track_id)
+                         VALUES (?1, 'track', ?2)
+                         ON CONFLICT(media_id) DO UPDATE SET mode = 'track', track_id = excluded.track_id",
+                        params![media_id, track_id],
+                    )
+                    .map_err(|_| DatabaseError::Unavailable)?;
+            }
+        }
+        Ok(SubtitlePreferenceResult::Saved)
+    }
+
+    pub(crate) fn subtitle_source(
+        &self,
+        media_id: &str,
+        track_id: &str,
+    ) -> Result<Option<SubtitleSourceRecord>, DatabaseError> {
+        self.connection
+            .lock()
+            .map_err(|_| DatabaseError::Unavailable)?
+            .query_row(
+                "SELECT libraries.root_path, media_items.path, media_tracks.source_index,
+                        media_items.metadata_json
+                 FROM media_tracks
+                 JOIN media_items ON media_items.id = media_tracks.media_id
+                 JOIN libraries ON libraries.id = media_items.library_id
+                 JOIN app_state ON app_state.current_library_id = libraries.id
+                 WHERE app_state.singleton = 1 AND media_tracks.media_id = ?1
+                   AND media_tracks.id = ?2 AND media_tracks.kind = 'subtitle'",
+                params![media_id, track_id],
+                |row| {
+                    Ok(SubtitleSourceRecord {
+                        root_path: PathBuf::from(row.get::<_, String>(0)?),
+                        media_path: PathBuf::from(row.get::<_, String>(1)?),
+                        source_index: row.get(2)?,
+                        metadata_json: row.get(3)?,
+                    })
+                },
             )
             .optional()
             .map_err(|_| DatabaseError::Unavailable)
@@ -811,6 +990,32 @@ mod tests {
             .query_row(
                 "SELECT COUNT(*) FROM sqlite_master
                  WHERE type = 'table' AND name = 'audio_preferences'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("preference table should query");
+        let version: i64 = connection
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .expect("schema version should load");
+        assert_eq!(table_count, 1);
+        assert_eq!(version, SCHEMA_VERSION);
+    }
+
+    #[test]
+    fn migrates_version_five_with_subtitle_preferences() {
+        let connection = Connection::open_in_memory().expect("database should open");
+        connection
+            .execute_batch(
+                "CREATE TABLE media_items (id TEXT PRIMARY KEY); PRAGMA user_version = 5;",
+            )
+            .expect("version five schema should be created");
+
+        let database = LibraryDatabase::initialize(connection).expect("database should migrate");
+        let connection = database.connection.lock().expect("database should lock");
+        let table_count: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master
+                 WHERE type = 'table' AND name = 'subtitle_preferences'",
                 [],
                 |row| row.get(0),
             )

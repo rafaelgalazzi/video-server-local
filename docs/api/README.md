@@ -8,13 +8,19 @@
 
 - `GET /api/v1/library`
 
-  Returns the current path-free `LibraryScan` JSON or `null` when no library exists. Media entries contain opaque `id`, `title`, `extension`, `sizeBytes`, `probeStatus`, optional `metadata`, and optional `selectedAudioTrackId` fields. Available metadata contains normalized container, duration, video dimensions/codec, and complete audio/subtitle track summaries. Track IDs are opaque; source stream indices and filesystem paths are never returned. `probeStatus` is `available`, `not_probed`, or `unavailable`, allowing one corrupt or inaccessible item to remain safely listed without aborting the library scan.
+  Returns the current path-free `LibraryScan` JSON or `null` when no library exists. Media entries contain opaque `id`, `title`, `extension`, `sizeBytes`, `probeStatus`, optional `metadata`, optional `selectedAudioTrackId`, `subtitleMode`, and optional `selectedSubtitleTrackId` fields. Subtitle mode is `automatic`, `off`, or `track`. Available metadata contains normalized container, duration, video dimensions/codec, and complete audio/subtitle track summaries. Track IDs are opaque; source stream indices and filesystem paths are never returned.
 
 Audio preference mutation is currently a trusted-local Tauri command rather than an HTTP route. Adding a cookie-authenticated unsafe browser method requires the project’s CSRF-token gate first. The core validates that the opaque track belongs to the current media item and privately resolves it to the ffprobe source index for later compatibility/remux/transcode decisions.
+
+Subtitle preference mutation follows the same trusted-local rule. Automatic mode selects a forced track before a default track; Off is stored explicitly; a selected track resets to Automatic if a rescan no longer contains its fingerprinted opaque ID.
 
 - `GET /api/v1/media/{id}/stream`
 
   Streams a persisted item from the current approved library by opaque ID. Without `Range`, it returns `200 OK` and the complete file through bounded I/O. A valid single `bytes` range returns `206 Partial Content` with `Accept-Ranges`, `Content-Range`, `Content-Length`, and a video content type. Malformed, multipart, or unsatisfiable ranges return `416 Range Not Satisfiable` and `Content-Range: bytes */{size}`. Unknown IDs return `404` without filesystem details.
+
+- `GET /api/v1/media/{id}/subtitles/{trackId}`
+
+  Converts one validated embedded text subtitle to `text/vtt` using structured FFmpeg arguments, a 15-second timeout, a 2 MiB output bound, approved-library containment checks, and a two-job concurrency limit. Protected routers require library-read authentication. Bitmap subtitles return `415 subtitle_transform_required`; unknown formats return `415 subtitle_format_unsupported`; missing IDs return `404`. Responses are private and `no-store`.
 
 Errors use:
 

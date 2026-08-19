@@ -11,6 +11,8 @@ const item: MediaItem = {
   metadata: null,
   probeStatus: 'not_probed',
   selectedAudioTrackId: null,
+  subtitleMode: 'automatic',
+  selectedSubtitleTrackId: null,
 }
 
 describe('usePlayback', () => {
@@ -154,5 +156,104 @@ describe('usePlayback', () => {
 
     expect(calls).toBe(0)
     expect(subject.audioSelectionError.value).toContain('unavailable')
+  })
+
+  it('selects forced text subtitles automatically and persists Off explicitly', async () => {
+    const saved: Array<[string, string, string | null]> = []
+    const subject = usePlayback(
+      ref({ baseUrl: 'https://192.168.1.20:8443', bindScope: 'lan', lanAvailable: true }),
+      ref(true),
+      () => Promise.resolve(),
+      (mediaId, mode, trackId) => {
+        saved.push([mediaId, mode, trackId])
+        return Promise.resolve()
+      },
+    )
+    subject.play({
+      ...item,
+      id: 'mkv/subtitles',
+      metadata: {
+        container: 'matroska',
+        durationMillis: 1000,
+        video: null,
+        audioTracks: [],
+        subtitleTracks: [
+          {
+            id: 'sub-default',
+            codec: 'subrip',
+            language: 'por',
+            title: null,
+            isDefault: true,
+            isForced: false,
+            kind: 'text',
+          },
+          {
+            id: 'sub-forced',
+            codec: 'ass',
+            language: 'eng',
+            title: 'Signs',
+            isDefault: false,
+            isForced: true,
+            kind: 'text',
+          },
+        ],
+      },
+    })
+
+    expect(subject.activeSubtitleTrack.value?.id).toBe('sub-forced')
+    expect(subject.subtitleOptions.value[2].label).toBe('POR · SUBRIP · Default')
+    expect(subject.subtitleOptions.value[3].label).toBe('Signs · ASS · Forced')
+    expect(subject.subtitleTrackUrl.value).toBe(
+      'https://192.168.1.20:8443/api/v1/media/mkv%2Fsubtitles/subtitles/sub-forced',
+    )
+
+    await subject.selectSubtitle('off')
+
+    expect(saved).toEqual([['mkv/subtitles', 'off', null]])
+    expect(subject.activeSubtitleTrack.value).toBeNull()
+    expect(subject.subtitleTrackUrl.value).toBeNull()
+  })
+
+  it('reports bitmap delivery requirements and rejects malformed subtitle IDs', async () => {
+    let calls = 0
+    const subject = usePlayback(
+      ref({ baseUrl: 'http://127.0.0.1:49152', bindScope: 'loopback', lanAvailable: false }),
+      ref(true),
+      () => Promise.resolve(),
+      () => {
+        calls += 1
+        return Promise.resolve()
+      },
+    )
+    subject.play({
+      ...item,
+      subtitleMode: 'track',
+      selectedSubtitleTrackId: 'pgs',
+      metadata: {
+        container: 'matroska',
+        durationMillis: null,
+        video: null,
+        audioTracks: [],
+        subtitleTracks: [
+          {
+            id: 'pgs',
+            codec: 'hdmv_pgs_subtitle',
+            language: null,
+            title: null,
+            isDefault: false,
+            isForced: false,
+            kind: 'bitmap',
+          },
+        ],
+      },
+    })
+
+    expect(subject.subtitleOptions.value[2].label).toContain('Bitmap')
+    expect(subject.subtitleDeliveryNotice.value).toContain('requires video conversion')
+    expect(subject.subtitleTrackUrl.value).toBeNull()
+
+    await subject.selectSubtitle('track:unknown')
+    expect(calls).toBe(0)
+    expect(subject.subtitleSelectionError.value).toContain('invalid')
   })
 })

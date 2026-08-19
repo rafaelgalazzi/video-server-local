@@ -39,15 +39,51 @@ pub enum AudioSelectionError {
     Unavailable,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SubtitleSelection {
+    pub media_id: String,
+    pub mode: media::SubtitleMode,
+    pub selected_track_id: Option<String>,
+}
+
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum SubtitleSelectionError {
+    #[error("the selected media does not exist in the current library")]
+    UnknownMedia,
+    #[error("the selected subtitle track does not belong to this media item")]
+    InvalidTrack,
+    #[error("the subtitle preference store is unavailable")]
+    Unavailable,
+}
+
+#[derive(Debug, Error)]
+pub enum SubtitleDeliveryError {
+    #[error("the requested subtitle track does not exist")]
+    NotFound,
+    #[error("bitmap subtitles require a video transform")]
+    BitmapTransformRequired,
+    #[error("the subtitle format is not supported")]
+    UnsupportedFormat,
+    #[error("the subtitle source is outside the approved library")]
+    OutsideApprovedLibrary,
+    #[error("subtitle delivery is temporarily busy")]
+    Busy,
+    #[error("subtitle extraction is unavailable")]
+    Unavailable,
+}
+
 #[derive(Debug)]
 pub struct LocalStreamCore {
     database: database::LibraryDatabase,
     pairing: auth::PairingService,
     pairing_rate_limiter: auth::PairingRateLimiter,
     stream_permits: std::sync::Arc<tokio::sync::Semaphore>,
+    subtitle_permits: std::sync::Arc<tokio::sync::Semaphore>,
 }
 
 const MAX_CONCURRENT_STREAMS: usize = 8;
+const MAX_CONCURRENT_SUBTITLE_EXTRACTIONS: usize = 2;
 
 #[derive(Debug, Error)]
 pub enum CoreError {
@@ -76,6 +112,9 @@ impl LocalStreamCore {
             stream_permits: std::sync::Arc::new(tokio::sync::Semaphore::new(
                 MAX_CONCURRENT_STREAMS,
             )),
+            subtitle_permits: std::sync::Arc::new(tokio::sync::Semaphore::new(
+                MAX_CONCURRENT_SUBTITLE_EXTRACTIONS,
+            )),
         })
     }
 
@@ -87,6 +126,9 @@ impl LocalStreamCore {
             pairing_rate_limiter: auth::PairingRateLimiter::default(),
             stream_permits: std::sync::Arc::new(tokio::sync::Semaphore::new(
                 MAX_CONCURRENT_STREAMS,
+            )),
+            subtitle_permits: std::sync::Arc::new(tokio::sync::Semaphore::new(
+                MAX_CONCURRENT_SUBTITLE_EXTRACTIONS,
             )),
         })
     }
@@ -188,6 +230,96 @@ impl LocalStreamCore {
         media_id: &str,
     ) -> Result<Option<u32>, DatabaseError> {
         self.database.selected_audio_source_index(media_id)
+    }
+
+    pub fn select_subtitle(
+        &self,
+        media_id: &str,
+        mode: media::SubtitleMode,
+        track_id: Option<&str>,
+    ) -> Result<SubtitleSelection, SubtitleSelectionError> {
+        if (mode == media::SubtitleMode::Track) != track_id.is_some() {
+            return Err(SubtitleSelectionError::InvalidTrack);
+        }
+        match self
+            .database
+            .set_subtitle_preference(media_id, mode, track_id)
+            .map_err(|_| SubtitleSelectionError::Unavailable)?
+        {
+            database::SubtitlePreferenceResult::Saved => Ok(SubtitleSelection {
+                media_id: media_id.to_owned(),
+                mode,
+                selected_track_id: track_id.map(str::to_owned),
+            }),
+            database::SubtitlePreferenceResult::UnknownMedia => {
+                Err(SubtitleSelectionError::UnknownMedia)
+            }
+            database::SubtitlePreferenceResult::InvalidTrack => {
+                Err(SubtitleSelectionError::InvalidTrack)
+            }
+        }
+    }
+
+    pub async fn extract_subtitle_webvtt(
+        &self,
+        media_id: &str,
+        track_id: &str,
+        cancellation: tokio_util::sync::CancellationToken,
+    ) -> Result<Vec<u8>, SubtitleDeliveryError> {
+        use std::time::Duration;
+
+        let source = self
+            .database
+            .subtitle_source(media_id, track_id)
+            .map_err(|_| SubtitleDeliveryError::Unavailable)?
+            .ok_or(SubtitleDeliveryError::NotFound)?;
+        let metadata: media::MediaMetadata = serde_json::from_str(&source.metadata_json)
+            .map_err(|_| SubtitleDeliveryError::Unavailable)?;
+        let track = metadata
+            .subtitle_tracks
+            .iter()
+            .find(|track| track.id == track_id)
+            .ok_or(SubtitleDeliveryError::NotFound)?;
+        match track.kind {
+            media::SubtitleKind::Bitmap => {
+                return Err(SubtitleDeliveryError::BitmapTransformRequired)
+            }
+            media::SubtitleKind::Unknown => return Err(SubtitleDeliveryError::UnsupportedFormat),
+            media::SubtitleKind::Text => {}
+        }
+        let _permit = self
+            .subtitle_permits
+            .clone()
+            .try_acquire_owned()
+            .map_err(|_| SubtitleDeliveryError::Busy)?;
+        let root = tokio::fs::canonicalize(&source.root_path)
+            .await
+            .map_err(|_| SubtitleDeliveryError::Unavailable)?;
+        let path = tokio::fs::canonicalize(&source.media_path)
+            .await
+            .map_err(|_| SubtitleDeliveryError::Unavailable)?;
+        if path == root || !path.starts_with(&root) {
+            return Err(SubtitleDeliveryError::OutsideApprovedLibrary);
+        }
+        let ffmpeg = media_tools::MediaToolPaths::discover_ffmpeg()
+            .await
+            .map_err(|_| SubtitleDeliveryError::Unavailable)?;
+        let mapping = format!("0:{}", source.source_index);
+        let output = media_tools::ProcessRunner::run(
+            media_tools::ProcessRequest::new(ffmpeg)
+                .args(["-v", "error", "-i"])
+                .arg(path)
+                .args(["-map", &mapping, "-c:s", "webvtt", "-f", "webvtt", "pipe:1"])
+                .timeout(Duration::from_secs(15))
+                .output_limit(2 * 1024 * 1024),
+            cancellation,
+        )
+        .await
+        .map_err(|_| SubtitleDeliveryError::Unavailable)?;
+        if !output.success || !output.stdout.starts_with(b"WEBVTT") {
+            return Err(SubtitleDeliveryError::Unavailable);
+        }
+        Ok(output.stdout)
     }
 
     pub async fn open_direct_play(
@@ -335,6 +467,9 @@ mod tests {
             pairing: crate::auth::PairingService::for_test(ttl, capacity),
             pairing_rate_limiter: crate::auth::PairingRateLimiter::default(),
             stream_permits: Arc::new(tokio::sync::Semaphore::new(super::MAX_CONCURRENT_STREAMS)),
+            subtitle_permits: Arc::new(tokio::sync::Semaphore::new(
+                super::MAX_CONCURRENT_SUBTITLE_EXTRACTIONS,
+            )),
         }
     }
 
@@ -493,6 +628,24 @@ mod tests {
             assert_eq!(metadata.container, "matroska");
             assert_eq!(metadata.audio_tracks.len(), 2);
             assert_eq!(metadata.subtitle_tracks.len(), 1);
+            let subtitle_id = metadata.subtitle_tracks[0].id.clone();
+            core.select_subtitle(
+                &valid.id,
+                crate::media::SubtitleMode::Track,
+                Some(&subtitle_id),
+            )
+            .expect("text subtitle choice should persist");
+            let webvtt = core
+                .extract_subtitle_webvtt(
+                    &valid.id,
+                    &subtitle_id,
+                    tokio_util::sync::CancellationToken::new(),
+                )
+                .await
+                .expect("text subtitle should convert to WebVTT");
+            let webvtt = String::from_utf8(webvtt).expect("WebVTT should be UTF-8");
+            assert!(webvtt.starts_with("WEBVTT"));
+            assert!(webvtt.contains("Hello"));
             let corrupt = scan
                 .items
                 .iter()
@@ -512,16 +665,33 @@ mod tests {
             .expect("metadata should survive restart");
         assert_eq!(metadata.audio_tracks.len(), 2);
         assert_eq!(metadata.audio_tracks[1].language.as_deref(), Some("por"));
+        let restored_item = restored
+            .items
+            .iter()
+            .find(|item| item.title == "Dual Audio")
+            .expect("media should survive restart");
+        assert_eq!(
+            restored_item.subtitle_mode,
+            crate::media::SubtitleMode::Track
+        );
+        assert_eq!(
+            restored_item.selected_subtitle_track_id.as_deref(),
+            Some(metadata.subtitle_tracks[0].id.as_str())
+        );
     }
 
-    #[test]
-    fn validates_persists_retains_and_resets_audio_preferences() {
+    #[tokio::test]
+    async fn validates_persists_retains_and_resets_track_preferences() {
         use crate::media::{
             AudioTrack, MediaItem, MediaMetadata, ProbeStatus, ScannedLibrary, ScannedMedia,
-            TrackMapping,
+            SubtitleKind, SubtitleMode, SubtitleTrack, TrackMapping,
         };
 
-        fn snapshot(root: &std::path::Path, track_id: &str) -> ScannedLibrary {
+        fn snapshot(
+            root: &std::path::Path,
+            audio_track_id: &str,
+            subtitle_track_id: &str,
+        ) -> ScannedLibrary {
             ScannedLibrary {
                 library_name: "Videos".to_owned(),
                 root_path: root.to_path_buf(),
@@ -535,26 +705,43 @@ mod tests {
                         size_bytes: 42,
                         probe_status: ProbeStatus::Available,
                         selected_audio_track_id: None,
+                        subtitle_mode: crate::media::SubtitleMode::Automatic,
+                        selected_subtitle_track_id: None,
                         metadata: Some(MediaMetadata {
                             container: "matroska".to_owned(),
                             duration_millis: Some(1_000),
                             video: None,
                             audio_tracks: vec![AudioTrack {
-                                id: track_id.to_owned(),
+                                id: audio_track_id.to_owned(),
                                 codec: "aac".to_owned(),
                                 channels: Some(2),
                                 language: None,
                                 title: None,
                                 is_default: true,
                             }],
-                            subtitle_tracks: Vec::new(),
+                            subtitle_tracks: vec![SubtitleTrack {
+                                id: subtitle_track_id.to_owned(),
+                                codec: "hdmv_pgs_subtitle".to_owned(),
+                                language: Some("eng".to_owned()),
+                                title: None,
+                                is_default: false,
+                                is_forced: false,
+                                kind: SubtitleKind::Bitmap,
+                            }],
                         }),
                     },
-                    track_mappings: vec![TrackMapping {
-                        id: track_id.to_owned(),
-                        source_index: 3,
-                        kind: "audio",
-                    }],
+                    track_mappings: vec![
+                        TrackMapping {
+                            id: audio_track_id.to_owned(),
+                            source_index: 3,
+                            kind: "audio",
+                        },
+                        TrackMapping {
+                            id: subtitle_track_id.to_owned(),
+                            source_index: 4,
+                            kind: "subtitle",
+                        },
+                    ],
                 }],
             }
         }
@@ -567,7 +754,7 @@ mod tests {
         {
             let core = LocalStreamCore::open(&database).expect("database should open");
             core.database
-                .replace_library(&snapshot(&root, "audio-stable"))
+                .replace_library(&snapshot(&root, "audio-stable", "subtitle-stable"))
                 .expect("snapshot should persist");
             assert_eq!(
                 core.select_audio_track("media-1", Some("missing")),
@@ -579,8 +766,26 @@ mod tests {
                 core.selected_audio_source_index("media-1").unwrap(),
                 Some(3)
             );
+            assert_eq!(
+                core.select_subtitle("media-1", SubtitleMode::Track, Some("missing")),
+                Err(super::SubtitleSelectionError::InvalidTrack)
+            );
+            core.select_subtitle("media-1", SubtitleMode::Track, Some("subtitle-stable"))
+                .expect("valid subtitle should persist");
+            let delivery = core
+                .extract_subtitle_webvtt(
+                    "media-1",
+                    "subtitle-stable",
+                    tokio_util::sync::CancellationToken::new(),
+                )
+                .await
+                .expect_err("bitmap subtitles must require a transform");
+            assert!(matches!(
+                delivery,
+                super::SubtitleDeliveryError::BitmapTransformRequired
+            ));
             core.database
-                .replace_library(&snapshot(&root, "audio-stable"))
+                .replace_library(&snapshot(&root, "audio-stable", "subtitle-stable"))
                 .expect("unchanged snapshot should persist");
             assert_eq!(
                 core.current_library().unwrap().unwrap().items[0]
@@ -597,12 +802,22 @@ mod tests {
                 .as_deref(),
             Some("audio-stable")
         );
+        let restored_item = &core.current_library().unwrap().unwrap().items[0];
+        assert_eq!(restored_item.subtitle_mode, SubtitleMode::Track);
+        assert_eq!(
+            restored_item.selected_subtitle_track_id.as_deref(),
+            Some("subtitle-stable")
+        );
         core.database
-            .replace_library(&snapshot(&root, "audio-changed"))
+            .replace_library(&snapshot(&root, "audio-changed", "subtitle-changed"))
             .expect("changed snapshot should persist");
         assert!(core.current_library().unwrap().unwrap().items[0]
             .selected_audio_track_id
             .is_none());
+        assert_eq!(
+            core.current_library().unwrap().unwrap().items[0].subtitle_mode,
+            SubtitleMode::Automatic
+        );
         assert_eq!(
             core.select_audio_track("unknown", None),
             Err(super::AudioSelectionError::UnknownMedia)
@@ -614,6 +829,18 @@ mod tests {
         assert!(core.current_library().unwrap().unwrap().items[0]
             .selected_audio_track_id
             .is_none());
+        core.select_subtitle("media-1", SubtitleMode::Off, None)
+            .expect("Off should persist explicitly");
+        assert_eq!(
+            core.current_library().unwrap().unwrap().items[0].subtitle_mode,
+            SubtitleMode::Off
+        );
+        core.select_subtitle("media-1", SubtitleMode::Automatic, None)
+            .expect("automatic should clear the explicit preference");
+        assert_eq!(
+            core.current_library().unwrap().unwrap().items[0].subtitle_mode,
+            SubtitleMode::Automatic
+        );
     }
 
     #[tokio::test]

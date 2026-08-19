@@ -17,6 +17,8 @@ pub struct MediaItem {
     pub metadata: Option<MediaMetadata>,
     pub probe_status: ProbeStatus,
     pub selected_audio_track_id: Option<String>,
+    pub subtitle_mode: SubtitleMode,
+    pub selected_subtitle_track_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -76,6 +78,15 @@ pub enum SubtitleKind {
     Text,
     Bitmap,
     Unknown,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SubtitleMode {
+    #[default]
+    Automatic,
+    Off,
+    Track,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -195,6 +206,8 @@ pub(crate) fn scan_approved_directory_records(
                 metadata: None,
                 probe_status: ProbeStatus::NotProbed,
                 selected_audio_track_id: None,
+                subtitle_mode: SubtitleMode::Automatic,
+                selected_subtitle_track_id: None,
             },
             path: path.to_path_buf(),
             track_mappings: Vec::new(),

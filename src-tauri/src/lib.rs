@@ -56,6 +56,17 @@ fn select_audio_track(
 }
 
 #[tauri::command]
+fn select_subtitle(
+    core: tauri::State<'_, Arc<LocalStreamCore>>,
+    media_id: String,
+    mode: localstream_core::media::SubtitleMode,
+    track_id: Option<String>,
+) -> Result<localstream_core::SubtitleSelection, String> {
+    core.select_subtitle(&media_id, mode, track_id.as_deref())
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 fn server_info(
     server: tauri::State<'_, localstream_core::server::ServerHandle>,
 ) -> localstream_core::server::ServerInfo {
@@ -294,6 +305,7 @@ pub fn run() {
             suggested_lan_addresses,
             select_and_scan_library,
             select_audio_track,
+            select_subtitle,
             trusted_peers
         ])
         .run(tauri::generate_context!())

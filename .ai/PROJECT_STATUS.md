@@ -55,10 +55,11 @@ Phase A.1: MKV track support and browser compatibility before discovery.
 - FFmpeg/ffprobe discovery validates configured tools and runs structured no-shell processes with bounded output, timeout, cancellation, and kill-on-drop behavior.
 - Async persisted scans probe normalized container, duration, video, complete audio, and text/bitmap subtitle metadata; corrupt items fail individually, opaque track mappings remain private, and schema-v4 metadata survives restart.
 - Schema-v5 audio preferences validate opaque tracks against the current item, resolve private source indices, survive restart/unchanged rescans, reset when tracks change, and have accessible desktop playback controls.
+- Schema-v6 subtitle preferences support Automatic/Off/validated-track modes, forced-before-default selection, restart/rescan safety, accessible controls, bounded WebVTT text extraction, and explicit bitmap-transform errors.
 
 ## In Progress
 
-- LS-070 embedded subtitle selection is the next dependency in Phase A.1.
+- LS-045 Direct Play compatibility decisions are the next dependency in Phase A.1.
 
 ## Not Started
 
@@ -84,6 +85,6 @@ Phase A.1: MKV track support and browser compatibility before discovery.
 
 ## Next Major Goal
 
-Start LS-070 embedded subtitle selection. Complete compatibility and fallback tasks through LS-049 before Phase B.
+Start LS-045 Direct Play compatibility decisions. Complete bounded jobs and fallback tasks through LS-049 before Phase B.
 
 The dependency-ordered remaining backlog is maintained in [IMPLEMENTATION_ROADMAP.md](IMPLEMENTATION_ROADMAP.md). The committed completion target is the release-ready desktop LAN MVP through LS-060; post-MVP work is gated and must not silently resolve deferred architecture decisions.

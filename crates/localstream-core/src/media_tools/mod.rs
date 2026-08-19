@@ -31,6 +31,12 @@ impl MediaToolPaths {
         Ok(ffprobe)
     }
 
+    pub async fn discover_ffmpeg() -> Result<PathBuf, ToolDiscoveryError> {
+        let ffmpeg = configured_tool(std::env::var_os(FFMPEG_PATH_ENV), "ffmpeg")?;
+        validate_tool(&ffmpeg, "ffmpeg").await?;
+        Ok(ffmpeg)
+    }
+
     pub async fn discover() -> Result<Self, ToolDiscoveryError> {
         Self::discover_with(
             std::env::var_os(FFPROBE_PATH_ENV),

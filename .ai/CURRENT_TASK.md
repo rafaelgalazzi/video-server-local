@@ -2,11 +2,11 @@
 
 ## ID
 
-LS-070
+LS-045
 
 ## Title
 
-Embedded subtitle selection
+Direct Play compatibility decisions
 
 ## Status
 
@@ -14,27 +14,28 @@ Not Started
 
 ## Goal
 
-Expose accessible Off/default/forced subtitle choices, persist safe per-item preferences, and route text/bitmap selections into browser-compatible delivery decisions.
+Select Direct Play first, then remux, then transcode from normalized media metadata, selected tracks, subtitle delivery requirements, and explicit browser capabilities.
 
 ## Completed
 
 - Phase A through LS-031.
 - LS-043 safe FFmpeg/ffprobe discovery and process boundary.
 - LS-044 normalized metadata probing and schema-v4 persistence.
-- LS-069 schema-v5 validated audio preferences, opaque private source-index resolution, rescan retention/reset, and accessible native playback controls.
+- LS-069 schema-v5 audio preferences and private source-index resolution.
+- LS-070 schema-v6 Automatic/Off/track subtitle preferences, accessible controls, bounded WebVTT text extraction, and explicit bitmap-transform errors.
 
 ## Verification
 
-- Core tests cover valid/invalid/unknown selections, clearing, restart persistence, source-index resolution, unchanged rescan retention, and changed-track reset.
-- Vue tests cover default selection, accessible language/title/codec/channel labels, persistence, and unavailable-mode errors.
+- Core tests cover subtitle Off/Automatic/track modes, invalid IDs, restart retention, changed-track reset, and bitmap rejection.
+- A generated MKV fixture verifies embedded text conversion to WebVTT through bounded structured FFmpeg execution.
+- Vue tests cover forced-before-default behavior, labels, Off, bitmap notices, invalid IDs, and safe remote-mode behavior.
 
 ## Remaining
 
-- Add Off/default/forced subtitle preference semantics.
-- Persist and validate opaque subtitle selections.
-- Add accessible Vue subtitle controls.
-- Define supported text extraction/conversion and explicit bitmap behavior for compatibility decisions.
+- Define representative browser capability profiles.
+- Implement explainable Direct Play/remux/transcode decision rules.
+- Cover dual-audio, text/bitmap subtitle, container, and codec combinations with decision-table tests.
 
 ## Next Exact Step
 
-Implement LS-070 subtitle preference models and persistence, including the explicit Off state.
+Implement LS-045 transport-neutral browser capability and playback-decision models in the Rust core.

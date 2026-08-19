@@ -9,6 +9,8 @@ export interface MediaItem {
   metadata: MediaMetadata | null
   probeStatus: 'available' | 'not_probed' | 'unavailable'
   selectedAudioTrackId: string | null
+  subtitleMode: 'automatic' | 'off' | 'track'
+  selectedSubtitleTrackId: string | null
 }
 
 export interface MediaMetadata {

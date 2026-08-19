@@ -125,10 +125,18 @@ onUnmounted(() => {
         :can-select-audio="playback.canPersistAudio.value"
         :is-saving-audio="playback.isSavingAudio.value"
         :selected-audio-track-id="playback.selectedAudioTrackId.value"
+        :active-subtitle-track="playback.activeSubtitleTrack.value"
+        :subtitle-delivery-notice="playback.subtitleDeliveryNotice.value"
+        :subtitle-options="playback.subtitleOptions.value"
+        :subtitle-selection-error="playback.subtitleSelectionError.value"
+        :subtitle-selection-value="playback.subtitleSelectionValue.value"
+        :subtitle-track-url="playback.subtitleTrackUrl.value"
+        :is-saving-subtitle="playback.isSavingSubtitle.value"
         @close="playback.clear"
         @failed="playback.markError"
         @playing="playback.markPlaying"
         @select-audio="playback.selectAudioTrack"
+        @select-subtitle="playback.selectSubtitle"
       />
 
       <ServerStatus

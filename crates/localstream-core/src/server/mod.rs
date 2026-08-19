@@ -400,6 +400,10 @@ pub fn router(core: Arc<LocalStreamCore>) -> Router {
         .route("/api/v1/health", get(health))
         .route("/api/v1/library", get(current_library))
         .route("/api/v1/media/{id}/stream", get(stream_media))
+        .route(
+            "/api/v1/media/{id}/subtitles/{track_id}",
+            get(stream_subtitle),
+        )
         .with_state(core)
 }
 
@@ -407,6 +411,10 @@ pub fn authenticated_router(core: Arc<LocalStreamCore>) -> Router {
     let protected_routes = Router::new()
         .route("/api/v1/library", get(current_library))
         .route("/api/v1/media/{id}/stream", get(stream_media))
+        .route(
+            "/api/v1/media/{id}/subtitles/{track_id}",
+            get(stream_subtitle),
+        )
         .route_layer(middleware::from_fn_with_state(
             Arc::clone(&core),
             require_library_read,
@@ -1196,6 +1204,59 @@ async fn stream_media(
                 .map_err(|_| ApiError::internal())?,
         );
     }
+    Ok(response)
+}
+
+async fn stream_subtitle(
+    State(core): State<Arc<LocalStreamCore>>,
+    Path((media_id, track_id)): Path<(String, String)>,
+) -> Result<Response, ApiError> {
+    let body = core
+        .extract_subtitle_webvtt(
+            &media_id,
+            &track_id,
+            tokio_util::sync::CancellationToken::new(),
+        )
+        .await
+        .map_err(|error| match error {
+            crate::SubtitleDeliveryError::NotFound => ApiError::media_not_found(),
+            crate::SubtitleDeliveryError::BitmapTransformRequired => ApiError {
+                status: StatusCode::UNSUPPORTED_MEDIA_TYPE,
+                code: "subtitle_transform_required",
+                message: "This bitmap subtitle requires a video transform.",
+                content_range: None,
+                retry_after_seconds: None,
+            },
+            crate::SubtitleDeliveryError::UnsupportedFormat => ApiError {
+                status: StatusCode::UNSUPPORTED_MEDIA_TYPE,
+                code: "subtitle_format_unsupported",
+                message: "This subtitle format is not supported.",
+                content_range: None,
+                retry_after_seconds: None,
+            },
+            crate::SubtitleDeliveryError::Busy => ApiError {
+                status: StatusCode::SERVICE_UNAVAILABLE,
+                code: "subtitle_capacity_reached",
+                message: "Subtitle extraction is temporarily unavailable.",
+                content_range: None,
+                retry_after_seconds: None,
+            },
+            crate::SubtitleDeliveryError::OutsideApprovedLibrary
+            | crate::SubtitleDeliveryError::Unavailable => ApiError::internal(),
+        })?;
+    let mut response = Response::new(Body::from(body));
+    response.headers_mut().insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("text/vtt; charset=utf-8"),
+    );
+    response.headers_mut().insert(
+        header::CACHE_CONTROL,
+        HeaderValue::from_static("private, no-store"),
+    );
+    response.headers_mut().insert(
+        header::X_CONTENT_TYPE_OPTIONS,
+        HeaderValue::from_static("nosniff"),
+    );
     Ok(response)
 }
 
