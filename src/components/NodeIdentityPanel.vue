@@ -69,9 +69,9 @@ defineEmits<{
         the platform administrator's certificate-authority procedure. These steps vary by release
         and are not automatically performed by LocalStream.
       </p>
-      <label>
+      <label class="checkbox-field">
         <input v-model="fingerprintAcknowledged" type="checkbox" />
-        I will compare the complete fingerprint before trusting this certificate.
+        <span>I will compare the complete fingerprint before trusting this certificate.</span>
       </label>
     </div>
     <p v-if="identity" class="identity-panel__trust-guidance">

@@ -17,7 +17,12 @@ const displayName = ref('Browser')
 
 <template>
   <section class="status-card" aria-labelledby="browser-status-title" aria-live="polite">
-    <div>
+    <div
+      class="status-card__signal"
+      :class="{ 'status-card__signal--ready': state === 'authenticated' }"
+      aria-hidden="true"
+    />
+    <div class="status-card__content">
       <p id="browser-status-title" class="status-card__label">Remote browser</p>
       <p v-if="state === 'bootstrapping'" class="status-card__detail">
         Connecting securely to this LocalStream node…
@@ -33,8 +38,11 @@ const displayName = ref('Browser')
         {{ error ?? 'The LocalStream node could not be reached.' }}
       </p>
       <p v-else class="status-card__detail">Preparing secure browser access…</p>
-      <div v-if="state === 'pairing-required' && !pairing">
-        <label>Device name <input v-model="displayName" maxlength="80" /></label>
+      <div v-if="state === 'pairing-required' && !pairing" class="inline-form">
+        <label class="form-field">
+          <span>Device name</span>
+          <input v-model="displayName" maxlength="80" />
+        </label>
         <button
           type="button"
           :disabled="isPairing || !displayName.trim()"
@@ -43,7 +51,7 @@ const displayName = ref('Browser')
           {{ isPairing ? 'Starting…' : 'Start pairing' }}
         </button>
       </div>
-      <div v-if="pairing" role="status">
+      <div v-if="pairing" class="pairing-receipt" role="status">
         <p>Compare this code on the trusted desktop:</p>
         <strong class="pairing-request__code">{{ pairing.verificationCode }}</strong>
         <p>Expires in {{ pairing.expiresInSeconds }} seconds.</p>

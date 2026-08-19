@@ -33,35 +33,40 @@ watch(
       Disabled by default. Select one explicit private address; wildcard and loopback binding are
       rejected.
     </p>
-    <label><input v-model="draft.enabled" type="checkbox" /> Enable after restart</label>
-    <label
-      >Address<select v-model="draft.address" :disabled="!draft.enabled">
-        <option :value="null">Select an address</option>
-        <option v-for="address in addresses" :key="address">{{ address }}</option>
-      </select></label
-    >
-    <label
-      >HTTPS port<input
-        v-model.number="draft.port"
-        type="number"
-        min="1024"
-        max="65534"
-        :disabled="!draft.enabled"
-    /></label>
-    <label
-      >Optional DNS name<input
-        v-model="draft.dnsName"
-        type="text"
-        :disabled="!draft.enabled"
-        placeholder="media.home"
-    /></label>
-    <button
-      type="button"
-      :disabled="isSaving || (draft.enabled && !draft.address)"
-      @click="emit('save', { ...draft })"
-    >
-      {{ isSaving ? 'Saving…' : 'Save LAN configuration' }}
-    </button>
+    <div class="settings-form">
+      <label class="checkbox-field">
+        <input v-model="draft.enabled" type="checkbox" />
+        <span>Enable secure LAN access after restart</span>
+      </label>
+      <label
+        >Address<select v-model="draft.address" :disabled="!draft.enabled">
+          <option :value="null">Select an address</option>
+          <option v-for="address in addresses" :key="address">{{ address }}</option>
+        </select></label
+      >
+      <label
+        >HTTPS port<input
+          v-model.number="draft.port"
+          type="number"
+          min="1024"
+          max="65534"
+          :disabled="!draft.enabled"
+      /></label>
+      <label
+        >Optional DNS name<input
+          v-model="draft.dnsName"
+          type="text"
+          :disabled="!draft.enabled"
+          placeholder="media.home"
+      /></label>
+      <button
+        type="button"
+        :disabled="isSaving || (draft.enabled && !draft.address)"
+        @click="emit('save', { ...draft })"
+      >
+        {{ isSaving ? 'Saving…' : 'Save LAN configuration' }}
+      </button>
+    </div>
     <p v-if="status?.endpoint" class="feedback">{{ status.endpoint }}</p>
     <p v-if="notice" class="feedback">{{ notice }}</p>
     <p v-if="error" class="feedback feedback--error" role="alert">{{ error }}</p>
