@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import BrowserBootstrapPanel from './components/BrowserBootstrapPanel.vue'
 import LanServerPanel from './components/LanServerPanel.vue'
 import FoundationStatus from './components/FoundationStatus.vue'
@@ -7,7 +7,6 @@ import MediaLibraryPanel from './components/MediaLibraryPanel.vue'
 import NodeIdentityPanel from './components/NodeIdentityPanel.vue'
 import PairingRequestsPanel from './components/PairingRequestsPanel.vue'
 import PlaybackPanel from './components/PlaybackPanel.vue'
-import ServerStatus from './components/ServerStatus.vue'
 import TrustedPeersPanel from './components/TrustedPeersPanel.vue'
 import { useAppInfo } from './composables/useAppInfo'
 import { useMediaLibrary } from './composables/useMediaLibrary'
@@ -27,6 +26,8 @@ const pairing = usePairingRequests()
 const trustedPeers = useTrustedPeers()
 const runtime = useRuntimeBootstrap()
 const lanServer = useLanServer()
+type WorkspaceTab = 'library' | 'network' | 'access'
+const activeTab = ref<WorkspaceTab>('library')
 const activeServer = computed(() =>
   runtime.isNative.value ? serverStatus.server.value : runtime.server.value,
 )
@@ -73,25 +74,16 @@ onUnmounted(() => {
 
 <template>
   <main class="app-shell">
-    <section class="hero" aria-labelledby="page-title">
-      <p class="eyebrow">Private media. Your network.</p>
-      <h1 id="page-title">LocalStream</h1>
-      <p class="lede">
-        A local-first home for the media you choose to share designed to work across your LAN
-        without a cloud account.
-      </p>
+    <header class="app-header" aria-labelledby="page-title">
+      <div class="app-header__intro">
+        <h1 id="page-title">LocalStream</h1>
+        <p class="lede">Private media on your network.</p>
+      </div>
+    </header>
 
-      <FoundationStatus
-        v-if="runtime.isNative.value"
-        :app-info="appInfo"
-        :error="error"
-        :is-loading="isLoading"
-        :runtime-label="runtimeLabel"
-        @retry="load"
-      />
-
+    <section class="workspace" aria-label="LocalStream workspace">
       <BrowserBootstrapPanel
-        v-else
+        v-if="!runtime.isNative.value"
         :error="runtime.error.value"
         :is-pairing="runtime.isPairing.value"
         :pairing="runtime.pairing.value"
@@ -101,117 +93,161 @@ onUnmounted(() => {
         @retry="runtime.loadBrowser"
       />
 
-      <MediaLibraryPanel
-        :can-play="playback.canPlay.value"
-        :can-select="runtime.isNative.value"
-        :error="runtime.isNative.value ? mediaLibrary.error.value : runtime.error.value"
-        :is-scanning="mediaLibrary.isScanning.value"
-        :is-restoring="mediaLibrary.isRestoring.value"
-        :item-count-label="activeItemCountLabel"
-        :library="activeLibrary"
-        :notice="mediaLibrary.notice.value"
-        @play="playback.play"
-        @select="selectLibrary"
-      />
-
-      <PlaybackPanel
-        v-if="playback.selectedItem.value && playback.streamUrl.value"
-        :error="playback.error.value"
-        :item="playback.selectedItem.value"
-        :status="playback.status.value"
-        :progress="playback.playbackProgress.value"
-        :stream-url="playback.streamUrl.value"
-        :audio-options="playback.audioOptions.value"
-        :audio-selection-error="playback.audioSelectionError.value"
-        :can-select-audio="playback.canPersistAudio.value"
-        :is-saving-audio="playback.isSavingAudio.value"
-        :selected-audio-track-id="playback.selectedAudioTrackId.value"
-        :active-subtitle-track="playback.activeSubtitleTrack.value"
-        :subtitle-delivery-notice="playback.subtitleDeliveryNotice.value"
-        :subtitle-options="playback.subtitleOptions.value"
-        :subtitle-selection-error="playback.subtitleSelectionError.value"
-        :subtitle-selection-value="playback.subtitleSelectionValue.value"
-        :subtitle-track-url="playback.subtitleTrackUrl.value"
-        :is-saving-subtitle="playback.isSavingSubtitle.value"
-        @close="playback.clear"
-        @failed="playback.markError"
-        @playing="playback.markPlaying"
-        @select-audio="playback.selectAudioTrack"
-        @select-subtitle="playback.selectSubtitle"
-      />
-
-      <ServerStatus
-        v-if="runtime.isNative.value"
-        :error="serverStatus.error.value"
-        :server="serverStatus.server.value"
-        :status-label="serverStatus.statusLabel.value"
-      />
-
-      <NodeIdentityPanel
-        v-if="runtime.isNative.value"
-        :error="nodeIdentity.error.value"
-        :identity="nodeIdentity.identity.value"
-        :is-confirming-reset="nodeIdentity.isConfirmingReset.value"
-        :is-exporting="nodeIdentity.isExporting.value"
-        :is-resetting="nodeIdentity.isResetting.value"
-        :notice="nodeIdentity.notice.value"
-        :status-label="nodeIdentity.statusLabel.value"
-        @cancel-reset="nodeIdentity.cancelReset"
-        @confirm-reset="nodeIdentity.confirmReset"
-        @export-certificate="nodeIdentity.exportRootCertificate"
-        @reset="nodeIdentity.requestReset"
-      />
-
-      <PairingRequestsPanel
-        v-if="runtime.isNative.value"
-        :error="pairing.error.value"
-        :is-deciding="pairing.isDeciding"
-        :is-loading="pairing.isLoading.value"
-        :notice="pairing.notice.value"
-        :requests="pairing.requests.value"
-        @approve="pairing.approve"
-        @reject="pairing.reject"
-        @retry="pairing.startPolling"
-      />
-
-      <TrustedPeersPanel
-        v-if="runtime.isNative.value"
-        :confirming-peer="trustedPeers.confirmingPeer.value"
-        :error="trustedPeers.error.value"
-        :is-loading="trustedPeers.isLoading.value"
-        :is-revoking="trustedPeers.isRevoking.value"
-        :notice="trustedPeers.notice.value"
-        :peers="trustedPeers.peers.value"
-        @cancel="trustedPeers.cancelRevocation"
-        @confirm="trustedPeers.confirmRevocation"
-        @refresh="trustedPeers.load"
-        @revoke="trustedPeers.requestRevocation"
-      />
-
-      <LanServerPanel
-        v-if="runtime.isNative.value"
-        :addresses="lanServer.addresses.value"
-        :config="lanServer.config.value"
-        :error="lanServer.error.value"
-        :is-saving="lanServer.isSaving.value"
-        :notice="lanServer.notice.value"
-        :status="lanServer.status.value"
-        :status-label="lanServer.statusLabel.value"
-        @save="lanServer.save"
-      />
-    </section>
-
-    <aside class="roadmap" aria-label="Initial roadmap">
-      <span class="roadmap__index">01</span>
-      <div>
-        <p class="roadmap__label">Foundation milestone</p>
-        <h2>From local folder to living-room screen.</h2>
+      <section v-if="runtime.isNative.value" class="access-guide" aria-labelledby="setup-title">
+        <div>
+          <p class="section-label">Quick setup</p>
+          <h2 id="setup-title">Connect another device</h2>
+        </div>
         <ol>
-          <li><span>Approve</span> a media folder</li>
-          <li><span>Index</span> it locally</li>
-          <li><span>Play</span> it anywhere on your LAN</li>
+          <li><span>1</span>Choose your media folder in Library & playback.</li>
+          <li><span>2</span>Enable an address in Network and restart LocalStream.</li>
+          <li><span>3</span>Open that address on your device and approve its code in Access.</li>
         </ol>
+      </section>
+
+      <nav
+        v-if="runtime.isNative.value"
+        class="workspace-tabs"
+        aria-label="Settings sections"
+        role="tablist"
+      >
+        <button
+          v-for="tab in ['library', 'network', 'access'] as const"
+          :id="`workspace-tab-${tab}`"
+          :key="tab"
+          type="button"
+          role="tab"
+          :aria-controls="`workspace-panel-${tab}`"
+          :aria-selected="activeTab === tab"
+          :class="{ 'workspace-tabs__tab--active': activeTab === tab }"
+          @click="activeTab = tab"
+        >
+          {{ tab === 'library' ? 'Library & playback' : tab === 'network' ? 'Network' : 'Access' }}
+        </button>
+      </nav>
+
+      <div
+        v-show="!runtime.isNative.value || activeTab === 'library'"
+        id="workspace-panel-library"
+        class="tab-panel tab-panel--library"
+        role="tabpanel"
+        :aria-label="runtime.isNative.value ? undefined : 'Library and playback'"
+        :aria-labelledby="runtime.isNative.value ? 'workspace-tab-library' : undefined"
+      >
+        <MediaLibraryPanel
+          :can-play="playback.canPlay.value"
+          :can-select="runtime.isNative.value"
+          :error="runtime.isNative.value ? mediaLibrary.error.value : runtime.error.value"
+          :is-scanning="mediaLibrary.isScanning.value"
+          :is-restoring="mediaLibrary.isRestoring.value"
+          :item-count-label="activeItemCountLabel"
+          :library="activeLibrary"
+          :notice="mediaLibrary.notice.value"
+          @play="playback.play"
+          @select="selectLibrary"
+        />
+
+        <PlaybackPanel
+          v-if="playback.selectedItem.value && playback.streamUrl.value"
+          :error="playback.error.value"
+          :item="playback.selectedItem.value"
+          :status="playback.status.value"
+          :progress="playback.playbackProgress.value"
+          :stream-url="playback.streamUrl.value"
+          :audio-options="playback.audioOptions.value"
+          :audio-selection-error="playback.audioSelectionError.value"
+          :can-select-audio="playback.canPersistAudio.value"
+          :is-saving-audio="playback.isSavingAudio.value"
+          :selected-audio-track-id="playback.selectedAudioTrackId.value"
+          :active-subtitle-track="playback.activeSubtitleTrack.value"
+          :subtitle-delivery-notice="playback.subtitleDeliveryNotice.value"
+          :subtitle-options="playback.subtitleOptions.value"
+          :subtitle-selection-error="playback.subtitleSelectionError.value"
+          :subtitle-selection-value="playback.subtitleSelectionValue.value"
+          :subtitle-track-url="playback.subtitleTrackUrl.value"
+          :is-saving-subtitle="playback.isSavingSubtitle.value"
+          @close="playback.clear"
+          @failed="playback.markError"
+          @playing="playback.markPlaying"
+          @select-audio="playback.selectAudioTrack"
+          @select-subtitle="playback.selectSubtitle"
+        />
       </div>
-    </aside>
+
+      <div
+        v-if="runtime.isNative.value"
+        v-show="activeTab === 'network'"
+        id="workspace-panel-network"
+        class="tab-panel tab-panel--network"
+        role="tabpanel"
+        aria-labelledby="workspace-tab-network"
+      >
+        <LanServerPanel
+          :addresses="lanServer.addresses.value"
+          :config="lanServer.config.value"
+          :error="lanServer.error.value"
+          :is-saving="lanServer.isSaving.value"
+          :notice="lanServer.notice.value"
+          :status="lanServer.status.value"
+          :status-label="lanServer.statusLabel.value"
+          @save="lanServer.save"
+        />
+      </div>
+
+      <div
+        v-if="runtime.isNative.value"
+        v-show="activeTab === 'access'"
+        id="workspace-panel-access"
+        class="tab-panel tab-panel--access"
+        role="tabpanel"
+        aria-labelledby="workspace-tab-access"
+      >
+        <NodeIdentityPanel
+          :error="nodeIdentity.error.value"
+          :identity="nodeIdentity.identity.value"
+          :is-confirming-reset="nodeIdentity.isConfirmingReset.value"
+          :is-exporting="nodeIdentity.isExporting.value"
+          :is-resetting="nodeIdentity.isResetting.value"
+          :notice="nodeIdentity.notice.value"
+          :status-label="nodeIdentity.statusLabel.value"
+          @cancel-reset="nodeIdentity.cancelReset"
+          @confirm-reset="nodeIdentity.confirmReset"
+          @export-certificate="nodeIdentity.exportRootCertificate"
+          @reset="nodeIdentity.requestReset"
+        />
+        <PairingRequestsPanel
+          :error="pairing.error.value"
+          :is-deciding="pairing.isDeciding"
+          :is-loading="pairing.isLoading.value"
+          :notice="pairing.notice.value"
+          :requests="pairing.requests.value"
+          @approve="pairing.approve"
+          @reject="pairing.reject"
+          @retry="pairing.startPolling"
+        />
+        <TrustedPeersPanel
+          :confirming-peer="trustedPeers.confirmingPeer.value"
+          :error="trustedPeers.error.value"
+          :is-loading="trustedPeers.isLoading.value"
+          :is-revoking="trustedPeers.isRevoking.value"
+          :notice="trustedPeers.notice.value"
+          :peers="trustedPeers.peers.value"
+          @cancel="trustedPeers.cancelRevocation"
+          @confirm="trustedPeers.confirmRevocation"
+          @refresh="trustedPeers.load"
+          @revoke="trustedPeers.requestRevocation"
+        />
+      </div>
+
+      <footer v-if="runtime.isNative.value" class="app-footer">
+        <FoundationStatus
+          :app-info="appInfo"
+          :error="error"
+          :is-loading="isLoading"
+          :runtime-label="runtimeLabel"
+          @retry="load"
+        />
+      </footer>
+    </section>
   </main>
 </template>

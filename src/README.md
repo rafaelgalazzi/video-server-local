@@ -6,13 +6,13 @@ This directory contains the Vue 3 + TypeScript presentation layer.
 
 ## Features
 
-The shell displays product identity, loads framework-independent application information, presents an approved-folder video scan, plays selected items through the private loopback API, lets the local user decide pairing requests, and administers trusted devices.
+The responsive shell keeps product identity in a compact header. In native mode, always-visible quick-setup instructions sit above a tabbed workspace that groups library/playback, network, and access configuration. Each active tab uses a centered half-width column on desktop and the full width on smaller screens. Network configuration has one focused surface, advanced node identity controls stay collapsed, and core/version information sits in the page footer. The shell also loads framework-independent application information, presents an approved-folder video scan, plays selected items through the private loopback API, lets the local user decide pairing requests, and administers trusted devices.
 
 ## Important Files
 
 - `main.ts`: Vue application entry point.
-- `App.vue`: initial application shell.
-- `styles.css`: shared visual tokens and shell styling.
+- `App.vue`: responsive application shell and accessible workspace tabs.
+- `styles.css`: shared visual tokens, responsive workspace layout, and shell styling.
 - `components/`: presentation components.
 - `composables/`: reusable Vue state and backend orchestration.
 - `components/PlaybackPanel.vue`: native-controls Direct Play presentation.

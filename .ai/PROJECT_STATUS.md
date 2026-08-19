@@ -12,7 +12,7 @@ Phase B: Discovery and native pairing.
 
 - Two detailed planning documents describe product direction and quality expectations.
 - Repository-local governance, continuation, architecture, security, API, and development documentation exists.
-- Vue 3 + TypeScript + Vite frontend scaffold and responsive foundation screen.
+- Vue 3 + TypeScript + Vite frontend scaffold with always-visible setup guidance, responsive domain-focused workspace tabs, and unobtrusive footer version status.
 - Composition API backend state with success/failure unit coverage.
 - Tauri 2 shell configured with a thin `app_info` command.
 - Framework-independent `localstream-core` Rust crate with a unit test.

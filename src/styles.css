@@ -80,24 +80,27 @@ input[type='checkbox'] {
 
 .app-shell {
   min-height: 100vh;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+  width: min(100%, 1440px);
+  margin: 0 auto;
+  padding: clamp(1.25rem, 3vw, 3rem);
 }
 
-.hero,
-.roadmap {
-  padding: clamp(1.5rem, 5vw, 5rem);
+.app-header {
+  display: block;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid rgba(238, 248, 240, 0.12);
 }
 
-.hero {
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
-  border-right: 1px solid rgba(238, 248, 240, 0.12);
+.app-header__intro {
+  min-width: 0;
 }
 
-.hero > * {
-  width: min(100%, 720px);
+.app-header__intro > * {
+  width: min(100%, 760px);
+}
+
+.workspace {
+  padding-top: 1.25rem;
 }
 
 .eyebrow,
@@ -111,19 +114,133 @@ input[type='checkbox'] {
 }
 
 h1 {
-  margin: 0.2rem 0 1rem;
-  font-size: clamp(4rem, 11vw, 9rem);
-  line-height: 0.9;
-  letter-spacing: -0.075em;
+  margin: 0 0 0.3rem;
+  font-size: clamp(2rem, 4vw, 3.25rem);
+  line-height: 1;
+  letter-spacing: -0.055em;
   font-weight: 600;
 }
 
 .lede {
   max-width: 680px;
-  margin: 0 0 3.5rem;
-  font-size: clamp(1.1rem, 2vw, 1.45rem);
-  line-height: 1.65;
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.4;
   color: #aec8c1;
+}
+
+.workspace-tabs {
+  display: flex;
+  gap: 0.35rem;
+  width: fit-content;
+  max-width: 100%;
+  margin: 1.25rem 0;
+  padding: 0.35rem;
+  overflow-x: auto;
+  border: 1px solid rgba(238, 248, 240, 0.14);
+  border-radius: 999px;
+  background: rgba(3, 13, 15, 0.58);
+}
+
+.workspace-tabs button {
+  flex: 0 0 auto;
+  border-color: transparent;
+  color: #829e98;
+  white-space: nowrap;
+}
+
+.workspace-tabs button:hover,
+.workspace-tabs button:focus-visible {
+  color: #eef8f0;
+}
+
+.workspace-tabs button.workspace-tabs__tab--active {
+  border-color: rgba(101, 230, 174, 0.45);
+  color: #061416;
+  background: #65e6ae;
+  font-weight: 700;
+}
+
+.tab-panel {
+  display: flex;
+  width: 50%;
+  margin: 0 auto;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.tab-panel > * {
+  width: 100%;
+  max-width: none;
+  margin-top: 0;
+}
+
+.access-guide {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.4fr) minmax(0, 1.6fr);
+  gap: 1.25rem;
+  align-items: center;
+  margin-bottom: 1.25rem;
+  padding: 1.25rem 1.4rem;
+  border: 1px solid rgba(101, 230, 174, 0.22);
+  background: rgba(3, 13, 15, 0.42);
+}
+
+.access-guide h2 {
+  margin: 0;
+  font-size: clamp(1.35rem, 2.5vw, 2rem);
+}
+
+.access-guide ol {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: #aec8c1;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.access-guide li {
+  display: flex;
+  gap: 0.65rem;
+}
+
+.access-guide li span {
+  display: grid;
+  flex: 0 0 auto;
+  width: 1.5rem;
+  height: 1.5rem;
+  place-items: center;
+  border-radius: 50%;
+  color: #061416;
+  background: #65e6ae;
+  font-weight: 700;
+}
+
+.tab-panel--access > .identity-panel--advanced {
+  order: 1;
+}
+
+.app-footer {
+  margin-top: 2rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(238, 248, 240, 0.1);
+}
+
+.app-footer .status-card {
+  max-width: none;
+  padding: 0;
+  border: 0;
+  color: #829e98;
+  background: transparent;
+  backdrop-filter: none;
+}
+
+.app-footer .status-card__detail {
+  font-size: 0.75rem;
 }
 
 .status-card {
@@ -363,6 +480,35 @@ h1 {
   padding: 1.4rem;
   border: 1px solid rgba(101, 230, 174, 0.22);
   background: rgba(3, 13, 15, 0.42);
+}
+
+.identity-panel--advanced {
+  padding: 0;
+}
+
+.identity-panel--advanced > summary {
+  padding: 1rem 1.25rem;
+  cursor: pointer;
+  color: #aec8c1;
+  font-weight: 600;
+}
+
+.identity-panel--advanced > summary span {
+  margin-right: 0.6rem;
+  color: #65e6ae;
+  font-family: 'Cascadia Mono', 'SFMono-Regular', Consolas, monospace;
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.identity-panel__body {
+  padding: 0 1.4rem 1.4rem;
+  border-top: 1px solid rgba(238, 248, 240, 0.12);
+}
+
+.identity-panel__body > :first-child {
+  padding-top: 1.25rem;
 }
 
 .identity-panel h2,
@@ -659,27 +805,23 @@ h1 {
 }
 
 .roadmap {
-  display: flex;
-  gap: 1.5rem;
-  align-items: flex-end;
-  background: rgba(2, 10, 11, 0.3);
-}
-
-.roadmap__index {
-  align-self: flex-start;
-  font-family: 'Cascadia Mono', 'SFMono-Regular', Consolas, monospace;
-  color: #65e6ae;
+  padding: 1.25rem 1.4rem;
+  border: 1px solid rgba(101, 230, 174, 0.2);
+  background: rgba(2, 10, 11, 0.42);
 }
 
 .roadmap h2 {
-  max-width: 420px;
-  font-size: clamp(2rem, 4vw, 4rem);
-  line-height: 1.04;
-  letter-spacing: -0.045em;
+  margin: 0.35rem 0 0;
+  font-size: clamp(1.35rem, 2.25vw, 2rem);
+  line-height: 1.12;
+  letter-spacing: -0.035em;
 }
 
 .roadmap ol {
-  margin: 2.5rem 0 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 1rem 0 0;
   padding: 0;
   list-style: none;
   counter-reset: steps;
@@ -687,14 +829,15 @@ h1 {
 
 .roadmap li {
   counter-increment: steps;
-  padding: 1rem 0;
+  padding: 0.65rem 0;
   border-top: 1px solid rgba(238, 248, 240, 0.13);
   color: #829e98;
 }
 
 .roadmap li::before {
   content: '0' counter(steps);
-  margin-right: 1rem;
+  display: block;
+  margin: 0 0 0.35rem;
   font:
     0.7rem 'Cascadia Mono',
     'SFMono-Regular',
@@ -710,12 +853,21 @@ h1 {
 
 @media (max-width: 820px) {
   .app-shell {
+    padding: 1.25rem;
+  }
+
+  .roadmap ol {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  .access-guide,
+  .access-guide ol {
     grid-template-columns: 1fr;
   }
 
-  .hero {
-    border-right: 0;
-    border-bottom: 1px solid rgba(238, 248, 240, 0.12);
+  .tab-panel {
+    width: 100%;
   }
 
   .status-card {
