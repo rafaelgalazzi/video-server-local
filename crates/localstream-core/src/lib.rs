@@ -10,6 +10,7 @@ pub mod media_jobs;
 pub mod media_tools;
 pub mod native_client;
 pub mod node_identity;
+pub mod remux;
 pub mod server;
 pub mod streaming;
 
@@ -216,6 +217,96 @@ impl LocalStreamCore {
             .find(|item| item.id == media_id)
             .ok_or(compatibility::CompatibilityError::UnknownMedia)?;
         Ok(compatibility::decide_playback(item, client))
+    }
+
+    pub async fn submit_remux(
+        &self,
+        jobs: &media_jobs::MediaJobManager,
+        media_id: &str,
+        decision: &compatibility::PlaybackDecision,
+    ) -> Result<remux::RemuxSubmission, remux::RemuxError> {
+        let library = self
+            .database
+            .current_library()
+            .map_err(|_| remux::RemuxError::Unavailable)?
+            .ok_or(remux::RemuxError::UnknownMedia)?;
+        let item = library
+            .items
+            .iter()
+            .find(|item| item.id == media_id)
+            .ok_or(remux::RemuxError::UnknownMedia)?;
+        let metadata = item
+            .metadata
+            .as_ref()
+            .ok_or(remux::RemuxError::UnsupportedInput)?;
+        let video = metadata
+            .video
+            .as_ref()
+            .ok_or(remux::RemuxError::UnsupportedInput)?;
+        let location = self
+            .database
+            .media_location(media_id)
+            .map_err(|_| remux::RemuxError::Unavailable)?
+            .ok_or(remux::RemuxError::UnknownMedia)?;
+        let video_index = self
+            .database
+            .track_source_index(media_id, &video.id, "video")
+            .map_err(|_| remux::RemuxError::Unavailable)?
+            .ok_or(remux::RemuxError::UnsupportedInput)?;
+        let audio_index = decision
+            .selected_audio_track_id
+            .as_deref()
+            .map(|track_id| {
+                self.database
+                    .track_source_index(media_id, track_id, "audio")
+                    .map_err(|_| remux::RemuxError::Unavailable)?
+                    .ok_or(remux::RemuxError::InvalidTrack)
+            })
+            .transpose()?;
+        let (subtitle_index, subtitle_codec) = match decision.subtitle_delivery {
+            compatibility::SubtitleDelivery::Embedded => {
+                let track_id = decision
+                    .selected_subtitle_track_id
+                    .as_deref()
+                    .ok_or(remux::RemuxError::InvalidTrack)?;
+                let codec = metadata
+                    .subtitle_tracks
+                    .iter()
+                    .find(|track| track.id == track_id)
+                    .map(|track| track.codec.clone())
+                    .ok_or(remux::RemuxError::InvalidTrack)?;
+                let index = self
+                    .database
+                    .track_source_index(media_id, track_id, "subtitle")
+                    .map_err(|_| remux::RemuxError::Unavailable)?
+                    .ok_or(remux::RemuxError::InvalidTrack)?;
+                (Some(index), Some(codec))
+            }
+            compatibility::SubtitleDelivery::Off
+            | compatibility::SubtitleDelivery::ExternalWebVtt => (None, None),
+            compatibility::SubtitleDelivery::BurnIn => {
+                return Err(remux::RemuxError::UnsupportedSubtitleDelivery)
+            }
+        };
+        let ffmpeg = media_tools::MediaToolPaths::discover_ffmpeg()
+            .await
+            .map_err(|_| remux::RemuxError::Unavailable)?;
+        remux::submit(
+            jobs,
+            remux::RemuxSource {
+                media_id: media_id.to_owned(),
+                approved_root: location.root_path,
+                media_path: location.media_path,
+                source_size_bytes: item.size_bytes,
+                video_index,
+                audio_index,
+                subtitle_index,
+                subtitle_codec,
+            },
+            decision,
+            ffmpeg,
+        )
+        .await
     }
 
     pub fn select_audio_track(

@@ -21,7 +21,7 @@ Own bounded, transport-neutral execution of resource-heavy media transforms.
 
 - `MediaJobManager::start`: validates configuration, creates the private work root, and removes stale entries.
 - `MediaJobManager::submit`: admits or deduplicates a transform closure.
-- `MediaJobManager::snapshot`, `cancel`, and `release`: observe and control a job without exposing paths.
+- `MediaJobManager::snapshot`, `cancel`, `open_output`, and `release`: observe, consume, and control a job without exposing paths.
 - `MediaJobContext`: gives transform code its private directory, cancellation token, and progress reporter.
 
 ## Dependencies

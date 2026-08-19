@@ -88,6 +88,24 @@ pub struct MediaJobSubmission {
     pub disposition: SubmitDisposition,
 }
 
+#[derive(Debug)]
+pub struct MediaJobOutput {
+    pub file: tokio::fs::File,
+    pub size_bytes: u64,
+}
+
+#[derive(Debug, Error, Clone, Copy, PartialEq, Eq)]
+pub enum MediaJobOutputError {
+    #[error("the media job does not exist")]
+    UnknownJob,
+    #[error("the media job output is not ready")]
+    NotReady,
+    #[error("the media job output name is invalid")]
+    InvalidName,
+    #[error("the media job output is unavailable")]
+    Unavailable,
+}
+
 #[derive(Debug, Error, Clone, Copy, PartialEq, Eq)]
 pub enum MediaJobSubmitError {
     #[error("the media job key is invalid")]
@@ -323,6 +341,54 @@ impl MediaJobManager {
             let _ = remove_entry(&directory).await;
         }
         removed
+    }
+
+    pub async fn open_output(
+        &self,
+        id: MediaJobId,
+        name: &str,
+    ) -> Result<MediaJobOutput, MediaJobOutputError> {
+        let valid_name = Path::new(name).components().count() == 1
+            && matches!(
+                Path::new(name).components().next(),
+                Some(std::path::Component::Normal(_))
+            );
+        if !valid_name {
+            return Err(MediaJobOutputError::InvalidName);
+        }
+        {
+            let state = lock(&self.inner.state);
+            let record = state.jobs.get(&id).ok_or(MediaJobOutputError::UnknownJob)?;
+            if lock(record).state != MediaJobState::Completed {
+                return Err(MediaJobOutputError::NotReady);
+            }
+        }
+        let path = self.inner.root.join(id.0.to_string()).join(name);
+        let entry = tokio::fs::symlink_metadata(&path)
+            .await
+            .map_err(|_| MediaJobOutputError::Unavailable)?;
+        if !entry.is_file() || entry.file_type().is_symlink() {
+            return Err(MediaJobOutputError::Unavailable);
+        }
+        let file = tokio::fs::File::open(&path)
+            .await
+            .map_err(|_| MediaJobOutputError::Unavailable)?;
+        let metadata = file
+            .metadata()
+            .await
+            .map_err(|_| MediaJobOutputError::Unavailable)?;
+        if !metadata.is_file() {
+            return Err(MediaJobOutputError::Unavailable);
+        }
+        Ok(MediaJobOutput {
+            file,
+            size_bytes: metadata.len(),
+        })
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_output_path(&self, id: MediaJobId, name: &str) -> PathBuf {
+        self.inner.root.join(id.0.to_string()).join(name)
     }
 }
 
@@ -648,6 +714,53 @@ mod tests {
         tokio::time::timeout(Duration::from_secs(1), cancelled.notified())
             .await
             .expect("dropping the manager should cancel running work");
+    }
+
+    #[tokio::test]
+    async fn opens_only_completed_single_component_output_names() {
+        use tokio::io::AsyncReadExt;
+
+        let temp = TempDir::new().unwrap();
+        let manager = manager(&temp, 1, 1, 10).await;
+        let gate = Arc::new(Notify::new());
+        let worker_gate = Arc::clone(&gate);
+        let submission = manager
+            .submit(
+                MediaJobKey::new("output").unwrap(),
+                10,
+                move |context| async move {
+                    worker_gate.notified().await;
+                    tokio::fs::write(context.directory().join("output.mp4"), b"media")
+                        .await
+                        .unwrap();
+                    Ok(())
+                },
+            )
+            .unwrap();
+        assert_eq!(
+            manager
+                .open_output(submission.id, "output.mp4")
+                .await
+                .unwrap_err(),
+            MediaJobOutputError::NotReady
+        );
+        gate.notify_one();
+        wait_for(&manager, submission.id, MediaJobState::Completed).await;
+        assert_eq!(
+            manager
+                .open_output(submission.id, "../outside")
+                .await
+                .unwrap_err(),
+            MediaJobOutputError::InvalidName
+        );
+        let mut output = manager
+            .open_output(submission.id, "output.mp4")
+            .await
+            .unwrap();
+        assert_eq!(output.size_bytes, 5);
+        let mut bytes = Vec::new();
+        output.file.read_to_end(&mut bytes).await.unwrap();
+        assert_eq!(bytes, b"media");
     }
 
     #[tokio::test]

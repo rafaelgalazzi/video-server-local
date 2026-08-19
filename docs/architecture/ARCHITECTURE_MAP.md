@@ -22,7 +22,7 @@ LocalStream is planned as a local-first system with a Vue interface and thin tra
         SQLite         FFmpeg           mDNS
 ```
 
-The Vue/Tauri adapters, shared Rust core, library scanning, SQLite persistence, bounded Direct Play/WebVTT delivery, track preferences, compatibility decisions, bounded transform jobs, private-PKI HTTPS, pairing, browser sessions, and audited LAN exposure exist. Remux/transcode execution and discovery remain unimplemented.
+The Vue/Tauri adapters, shared Rust core, library scanning, SQLite persistence, bounded Direct Play/WebVTT delivery, track preferences, compatibility decisions, bounded transform jobs, selected-track remux execution, private-PKI HTTPS, pairing, browser sessions, and audited LAN exposure exist. Transcode execution, remux playback integration, and discovery remain unimplemented.
 
 ## Responsibilities
 

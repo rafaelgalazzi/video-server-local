@@ -2,11 +2,11 @@
 
 ## ID
 
-LS-047
+LS-048
 
 ## Title
 
-Remux fallback
+Transcode fallback
 
 ## Status
 
@@ -14,7 +14,7 @@ Not Started
 
 ## Goal
 
-Stream-copy compatible selected tracks from unsupported containers into a browser-compatible container through the bounded process and job boundaries.
+Implement bounded video/audio transcoding and subtitle conversion or burn-in profiles for measured browser compatibility gaps.
 
 ## Completed
 
@@ -24,17 +24,18 @@ Stream-copy compatible selected tracks from unsupported containers into a browse
 - LS-069 and LS-070 persisted track preferences and subtitle delivery semantics.
 - LS-045 explicit client-capability decision engine with Direct Play → remux → transcode precedence and stable reason codes.
 - LS-046 bounded media job concurrency, queues, deduplication, cancellation, temporary reservations, cleanup, and safe progress snapshots.
+- LS-047 containment-checked MP4/WebM remux jobs with exact selected-track stream-copy mapping and opaque output access.
 
 ## Verification
 
-- Job tests cover saturation, active-key deduplication, cancellation, manager shutdown, quota admission/output enforcement, stale restart cleanup, bounded progress, and cancellation propagation through the child-process boundary.
+- Real FFmpeg/ffprobe coverage verifies playable WebM output, exact second-audio selection, embedded text subtitle mapping, cancellation, unsupported requests, containment, and quota rejection.
 
 ## Remaining
 
-- Build structured FFmpeg stream-copy arguments from compatibility decisions and private source-track indices.
-- Produce a bounded browser-compatible output without exposing paths.
-- Cover dual-audio/subtitle mapping, cancellation, unsupported input, quota, and output playability.
+- Define conservative software video/audio encoding profiles for MP4 and WebM.
+- Map selected audio and subtitle conversion/burn-in modes through structured FFmpeg arguments.
+- Cover representative output codecs, cancellation/concurrency, quotas, track correctness, and Direct Play precedence.
 
 ## Next Exact Step
 
-Implement LS-047 remux fallback through the LS-043 process boundary and LS-046 job manager.
+Implement LS-048 bounded transcode fallback through the existing compatibility, process, and job boundaries.

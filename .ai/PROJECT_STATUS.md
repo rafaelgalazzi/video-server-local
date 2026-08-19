@@ -58,15 +58,16 @@ Phase A.1: MKV track support and browser compatibility before discovery.
 - Schema-v6 subtitle preferences support Automatic/Off/validated-track modes, forced-before-default selection, restart/rescan safety, accessible controls, bounded WebVTT text extraction, and explicit bitmap-transform errors.
 - A transport-neutral compatibility engine accepts explicit client capabilities and selects Direct Play, remux, transcode, or unavailable with effective tracks, subtitle delivery, target container, and stable reason codes.
 - A reusable media job manager bounds transform concurrency and queued admission, deduplicates active keys, propagates cancellation to child processes, reserves temporary quota, cleans failed/stale output, and exposes path-free progress snapshots.
+- MP4/WebM remux fallback canonicalizes approved sources, resolves opaque selections to private indices, stream-copies exactly selected compatible tracks through bounded jobs, and exposes completed files without paths.
 
 ## In Progress
 
-- LS-047 remux fallback is the next dependency in Phase A.1.
+- LS-048 transcode fallback is the next dependency in Phase A.1.
 
 ## Not Started
 
 - Node discovery, pairing, trust, and distributed libraries.
-- FFmpeg remux/transcoding execution.
+- FFmpeg transcoding execution and remux playback integration.
 - Automated tests, CI, packaging, and platform verification.
 
 ## Known Major Limitations
@@ -77,7 +78,7 @@ Phase A.1: MKV track support and browser compatibility before discovery.
 - Rescans replace the full stored snapshot rather than updating incrementally.
 - HTTP and Direct Play are loopback-only on an ephemeral port until pairing/authentication is implemented.
 - Direct Play supports one byte range per request; multipart ranges and conditional caching are not implemented.
-- Compatibility decisions and bounded transform jobs are implemented; remux/transcode execution and local fallback integration are not.
+- Compatibility decisions, bounded transform jobs, and remux execution are implemented; transcoding and local fallback integration are not.
 - Pairing requests are intentionally memory-only and disappear on restart.
 - Native client secret storage is not implemented.
 - Physical second-device certificate installation, browser onboarding, and playback are not verified.
@@ -87,6 +88,6 @@ Phase A.1: MKV track support and browser compatibility before discovery.
 
 ## Next Major Goal
 
-Start LS-047 remux fallback. Complete transcode and local fallback integration through LS-049 before Phase B.
+Start LS-048 transcode fallback, then complete local fallback integration in LS-049 before Phase B.
 
 The dependency-ordered remaining backlog is maintained in [IMPLEMENTATION_ROADMAP.md](IMPLEMENTATION_ROADMAP.md). The committed completion target is the release-ready desktop LAN MVP through LS-060; post-MVP work is gated and must not silently resolve deferred architecture decisions.

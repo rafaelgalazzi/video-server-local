@@ -591,6 +591,28 @@ impl LibraryDatabase {
             .map_err(|_| DatabaseError::Unavailable)
     }
 
+    pub(crate) fn track_source_index(
+        &self,
+        media_id: &str,
+        track_id: &str,
+        kind: &str,
+    ) -> Result<Option<u32>, DatabaseError> {
+        self.connection
+            .lock()
+            .map_err(|_| DatabaseError::Unavailable)?
+            .query_row(
+                "SELECT media_tracks.source_index FROM media_tracks
+                 JOIN media_items ON media_items.id = media_tracks.media_id
+                 JOIN app_state ON app_state.current_library_id = media_items.library_id
+                 WHERE app_state.singleton = 1 AND media_tracks.media_id = ?1
+                   AND media_tracks.id = ?2 AND media_tracks.kind = ?3",
+                params![media_id, track_id, kind],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|_| DatabaseError::Unavailable)
+    }
+
     pub(crate) fn set_subtitle_preference(
         &self,
         media_id: &str,
