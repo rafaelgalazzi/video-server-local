@@ -46,6 +46,12 @@ fn current_library(
 }
 
 #[tauri::command]
+fn clear_local_database(core: tauri::State<'_, Arc<LocalStreamCore>>) -> Result<(), String> {
+    core.clear_local_database()
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 fn select_audio_track(
     core: tauri::State<'_, Arc<LocalStreamCore>>,
     media_id: String,
@@ -347,6 +353,7 @@ pub fn run() {
             app_info,
             approve_pairing,
             cancel_playback,
+            clear_local_database,
             current_library,
             export_node_root_certificate,
             node_identity,

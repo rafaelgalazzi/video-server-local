@@ -943,6 +943,29 @@ impl LibraryDatabase {
             .map_err(|_| DatabaseError::Unavailable)?;
         Ok(changed)
     }
+
+    pub(crate) fn clear_all(&self) -> Result<(), DatabaseError> {
+        let mut connection = self
+            .connection
+            .lock()
+            .map_err(|_| DatabaseError::Unavailable)?;
+        let transaction = connection
+            .transaction()
+            .map_err(|_| DatabaseError::Unavailable)?;
+        transaction
+            .execute_batch(
+                "UPDATE app_state SET current_library_id = NULL WHERE singleton = 1;
+                 DELETE FROM audio_preferences;
+                 DELETE FROM subtitle_preferences;
+                 DELETE FROM browser_sessions;
+                 DELETE FROM media_tracks;
+                 DELETE FROM media_items;
+                 DELETE FROM libraries;
+                 DELETE FROM trusted_peers;",
+            )
+            .map_err(|_| DatabaseError::Unavailable)?;
+        transaction.commit().map_err(|_| DatabaseError::Unavailable)
+    }
 }
 
 fn probe_status_name(status: crate::media::ProbeStatus) -> &'static str {
@@ -980,6 +1003,47 @@ mod tests {
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .expect("schema version should load");
 
+        assert_eq!(version, SCHEMA_VERSION);
+    }
+
+    #[test]
+    fn clear_all_removes_local_records_and_preserves_the_schema() {
+        let database = LibraryDatabase::in_memory().expect("database should migrate");
+        {
+            let connection = database.connection.lock().expect("database should lock");
+            connection
+                .execute_batch(
+                    "INSERT INTO libraries VALUES ('library-1', 'Videos', '/videos', 0);
+                     UPDATE app_state SET current_library_id = 'library-1' WHERE singleton = 1;
+                     INSERT INTO media_items (
+                       id, library_id, path, title, extension, size_bytes, metadata_json, probe_status
+                     ) VALUES ('media-1', 'library-1', '/videos/movie.mkv', 'Movie', 'mkv', 5, NULL, 'not_probed');
+                     INSERT INTO media_tracks VALUES ('track-1', 'media-1', 0, 'audio');
+                     INSERT INTO audio_preferences VALUES ('media-1', 'track-1');
+                     INSERT INTO trusted_peers VALUES (
+                       'peer-1', 'Living Room', zeroblob(32), 'library.read', 1000, 0
+                     );
+                     INSERT INTO browser_sessions VALUES (
+                       zeroblob(32), 'peer-1', 'library.read', 1000, 2000, 0
+                     );",
+                )
+                .expect("records should seed");
+        }
+
+        database.clear_all().expect("database should clear");
+
+        assert!(database
+            .current_library()
+            .expect("library should query")
+            .is_none());
+        assert!(database
+            .active_peers()
+            .expect("peers should query")
+            .is_empty());
+        let connection = database.connection.lock().expect("database should lock");
+        let version: i64 = connection
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .expect("schema version should load");
         assert_eq!(version, SCHEMA_VERSION);
     }
 

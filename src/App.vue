@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import BrowserBootstrapPanel from './components/BrowserBootstrapPanel.vue'
+import DatabaseMaintenancePanel from './components/DatabaseMaintenancePanel.vue'
 import LanServerPanel from './components/LanServerPanel.vue'
 import FoundationStatus from './components/FoundationStatus.vue'
 import MediaLibraryPanel from './components/MediaLibraryPanel.vue'
@@ -9,6 +10,7 @@ import PairingRequestsPanel from './components/PairingRequestsPanel.vue'
 import PlaybackPanel from './components/PlaybackPanel.vue'
 import TrustedPeersPanel from './components/TrustedPeersPanel.vue'
 import { useAppInfo } from './composables/useAppInfo'
+import { useDatabaseMaintenance } from './composables/useDatabaseMaintenance'
 import { useMediaLibrary } from './composables/useMediaLibrary'
 import { useNodeIdentity } from './composables/useNodeIdentity'
 import { usePlayback } from './composables/usePlayback'
@@ -26,6 +28,8 @@ const pairing = usePairingRequests()
 const trustedPeers = useTrustedPeers()
 const runtime = useRuntimeBootstrap()
 const lanServer = useLanServer()
+const databaseMaintenance = useDatabaseMaintenance()
+const isConfirmingDatabaseClear = ref(false)
 type WorkspaceTab = 'library' | 'network' | 'access'
 const activeTab = ref<WorkspaceTab>('library')
 const activeServer = computed(() =>
@@ -51,6 +55,13 @@ watch(
 async function selectLibrary() {
   playback.clear()
   await mediaLibrary.selectLibrary()
+}
+
+async function clearLocalDatabase() {
+  if (!(await databaseMaintenance.clear())) return
+  playback.clear()
+  isConfirmingDatabaseClear.value = false
+  await Promise.all([mediaLibrary.loadCurrentLibrary(), trustedPeers.load()])
 }
 
 onMounted(() => {
@@ -236,6 +247,15 @@ onUnmounted(() => {
           @confirm="trustedPeers.confirmRevocation"
           @refresh="trustedPeers.load"
           @revoke="trustedPeers.requestRevocation"
+        />
+        <DatabaseMaintenancePanel
+          :error="databaseMaintenance.error.value"
+          :is-clearing="databaseMaintenance.isClearing.value"
+          :is-confirming="isConfirmingDatabaseClear"
+          :notice="databaseMaintenance.notice.value"
+          @cancel="isConfirmingDatabaseClear = false"
+          @clear="clearLocalDatabase"
+          @request="isConfirmingDatabaseClear = true"
         />
       </div>
 

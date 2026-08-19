@@ -17,6 +17,7 @@ The application shell groups these components into focused Library & playback, N
 - `ServerStatus.vue` renders the embedded API address and its loopback/LAN availability state.
 - `BrowserBootstrapPanel.vue` renders remote bootstrap, pairing-required, authenticated, disconnected, and retry states.
 - `LanServerPanel.vue` renders explicit private-address configuration and safe status.
+- `DatabaseMaintenancePanel.vue` presents a collapsed, confirmation-based local database reset.
 
 ## Public Interfaces
 

@@ -61,6 +61,7 @@ Phase B: Discovery and native pairing.
 - MP4/WebM remux fallback canonicalizes approved sources, resolves opaque selections to private indices, stream-copies exactly selected compatible tracks through bounded jobs, and exposes completed files without paths.
 - Software-only MP4/WebM transcode fallback handles selected audio, text subtitle conversion, and text/bitmap burn-in through bounded jobs without hardware acceleration.
 - Local desktop playback collects explicit browser capabilities, preserves Direct Play precedence, prepares remux/transcode jobs with progress and safe failure states, supports cancel/retry/cleanup, and Range-streams opaque completed output.
+- Confirmed local database clearing transactionally removes indexed media, preferences, sessions, and trusted peers without deleting media files, node identity, or LAN configuration.
 
 ## In Progress
 

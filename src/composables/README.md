@@ -16,6 +16,7 @@ Own reusable Vue-native state and coordinate typed backend adapters without intr
 - `useRuntimeBootstrap`: selects native Tauri or same-origin browser transport and exposes explicit connection states.
 - `useTrustOnboarding`: gates root export on fingerprint-comparison acknowledgement.
 - `useLanServer`: manages disabled-by-default explicit LAN configuration and status.
+- `useDatabaseMaintenance`: coordinates explicit database clearing with safe success/failure state.
 
 ## Important Files
 
@@ -32,6 +33,7 @@ Own reusable Vue-native state and coordinate typed backend adapters without intr
 - `usePairingRequests.test.ts`: load, decision, failure retention, polling, and cleanup tests.
 - `useTrustedPeers.ts`: active-peer load, confirmation, cancellation, and revocation orchestration.
 - `useTrustedPeers.test.ts`: safe load, confirmation, success, cancellation, and failure-retention tests.
+- `useDatabaseMaintenance.ts` and its test: destructive local-data clearing adapter and failure containment.
 
 ## Public Interfaces
 

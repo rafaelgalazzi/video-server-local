@@ -17,6 +17,7 @@ Persist approved libraries and internal media-location records in embedded SQLit
 - Schema-v4 normalized media metadata JSON plus private opaque-track-to-source-index mappings.
 - Schema-v5 per-media audio preferences retained only while the fingerprinted track remains valid.
 - Schema-v6 subtitle preferences with distinct Automatic, Off, and validated-track semantics.
+- Transactional local-data clearing removes library records, track preferences, sessions, and peers while preserving the migrated schema.
 
 ## Important Files
 
@@ -24,7 +25,7 @@ Persist approved libraries and internal media-location records in embedded SQLit
 
 ## Public Interfaces
 
-Database details remain private behind `LocalStreamCore::scan_and_persist_library` and `LocalStreamCore::current_library`.
+Database details remain private behind `LocalStreamCore` operations, including scan, restoration, and explicit local-database clearing.
 
 ## Dependencies
 
@@ -32,7 +33,7 @@ Rusqlite with bundled SQLite.
 
 ## Current Limitations
 
-The schema stores one current library selection and full-snapshot rescans. Incremental updates and backup/recovery UI are not implemented.
+The schema stores one current library selection and full-snapshot rescans. Clearing requires an available database connection; recovery from a database that cannot be opened and backup restoration are not implemented.
 
 ## Planned Work
 

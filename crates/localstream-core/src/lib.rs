@@ -203,6 +203,10 @@ impl LocalStreamCore {
         self.database.current_library()
     }
 
+    pub fn clear_local_database(&self) -> Result<(), DatabaseError> {
+        self.database.clear_all()
+    }
+
     pub fn playback_decision(
         &self,
         media_id: &str,
