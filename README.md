@@ -30,3 +30,6 @@ These are planning inputs. Accepted architecture decisions live in ADRs, and act
 For the shortest setup and startup instructions, read [RUN.md](RUN.md).
 
 Install dependencies with `npm install`, launch the web preview with `npm run dev`, and run all available frontend checks with `npm run verify`. Native commands require a Rust toolchain and Tauri system prerequisites; use `npm run tauri dev` after installing them. See [DEVELOPMENT.md](docs/development/DEVELOPMENT.md) for exact verified and unverified workflows.
+
+
+Made only to test the AI, the code is awful 
