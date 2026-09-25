@@ -329,6 +329,16 @@ Depends on: LS-050.
 
 Completion evidence: upgrade/restart/corruption fixtures and recovery tests.
 
+### LS-075 — Single-file Windows portable release baseline
+
+Status: completed 2026-09-25.
+
+Create one copy-and-run Windows x64 `LocalStream.exe` that embeds the separately served Vue resources, checksum-pinned FFmpeg/ffprobe, and exact third-party notices. Verify and atomically extract a bounded, content-addressed payload under application data, then make desktop startup select those tools explicitly without changing the core's development/`PATH` policy. Keep LAN activation and certificate trust explicit; WebView2 remains the selected profile's Windows prerequisite.
+
+Depends on: LS-024 through LS-031 and LS-043/LS-044. This corrective packaging baseline does not replace or complete LS-055.
+
+Completion evidence: verified media-tool preparation, portable payload integrity/path/bound/repair tests, a generated `LocalStream.exe`, and copy-only first/second launch with LAN-resource checks while FFmpeg was absent from `PATH`. Broader cleanup UX, signing, physical second-device trust, and retention qualification remains under LS-055.
+
 ### LS-055 — Windows packaging and verification
 
 Package the Vue assets, Rust core, platform secret storage, and any selected FFmpeg distribution; verify install, upgrade, uninstall, firewall UX, trust onboarding, playback, and data retention on supported Windows versions.

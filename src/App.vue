@@ -15,6 +15,7 @@ import { useMediaLibrary } from './composables/useMediaLibrary'
 import { useNodeIdentity } from './composables/useNodeIdentity'
 import { usePlayback } from './composables/usePlayback'
 import { usePairingRequests } from './composables/usePairingRequests'
+import { usePortableRuntime } from './composables/usePortableRuntime'
 import { useServerStatus } from './composables/useServerStatus'
 import { useTrustedPeers } from './composables/useTrustedPeers'
 import { useRuntimeBootstrap } from './composables/useRuntimeBootstrap'
@@ -25,6 +26,7 @@ const mediaLibrary = useMediaLibrary()
 const nodeIdentity = useNodeIdentity()
 const serverStatus = useServerStatus()
 const pairing = usePairingRequests()
+const portableRuntime = usePortableRuntime()
 const trustedPeers = useTrustedPeers()
 const runtime = useRuntimeBootstrap()
 const lanServer = useLanServer()
@@ -83,6 +85,7 @@ onMounted(() => {
   void nodeIdentity.load()
   void serverStatus.load()
   void pairing.startPolling()
+  void portableRuntime.load()
   void trustedPeers.load()
   void lanServer.load()
 })
@@ -120,8 +123,17 @@ onUnmounted(() => {
         </div>
         <ol>
           <li><span>1</span>Choose your media folder in Library & playback.</li>
-          <li><span>2</span>Enable an address in Network and restart LocalStream.</li>
-          <li><span>3</span>Open that address on your device and approve its code in Access.</li>
+          <li>
+            <span>2</span>Enable a private address in Network, save it, and restart LocalStream.
+          </li>
+          <li>
+            <span>3</span>In Access, export the root certificate and verify its full fingerprint.
+          </li>
+          <li>
+            <span>4</span>Install the certificate on the other device, then open the shown HTTPS
+            address.
+          </li>
+          <li><span>5</span>Start pairing in the browser and approve its matching code here.</li>
         </ol>
       </section>
 
@@ -276,6 +288,8 @@ onUnmounted(() => {
           :app-info="appInfo"
           :error="error"
           :is-loading="isLoading"
+          :portable-failure="portableRuntime.status.value?.failure ?? null"
+          :portable-state="portableRuntime.status.value?.state ?? null"
           :runtime-label="runtimeLabel"
           @retry="load"
         />

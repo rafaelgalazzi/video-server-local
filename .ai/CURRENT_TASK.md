@@ -2,44 +2,58 @@
 
 ## ID
 
-LS-032
+LS-075
 
 ## Title
 
-Discovery protocol ADR and service contract
+Single-file Windows portable release baseline
 
 ## Status
 
-Not Started
+Completed
 
 ## Goal
 
-Define the Phase B discovery protocol and reusable service boundary without weakening the completed Phase A security gates.
+Produce one copy-and-run Windows x64 `LocalStream.exe` that carries the remote browser resources and FFmpeg/ffprobe without an installer or target-computer development tools, while preserving explicit LAN activation and certificate trust.
 
 ## Completed
 
-- Phase A through LS-031.
-- LS-043 bounded FFmpeg process boundary.
-- LS-044 normalized metadata probing.
-- LS-069 and LS-070 persisted track preferences and subtitle delivery semantics.
-- LS-045 explicit client-capability decision engine with Direct Play → remux → transcode precedence and stable reason codes.
-- LS-046 bounded media job concurrency, queues, deduplication, cancellation, temporary reservations, cleanup, and safe progress snapshots.
-- LS-047 containment-checked MP4/WebM remux jobs with exact selected-track stream-copy mapping and opaque output access.
-- LS-048 software-only MP4/WebM transcode profiles with selected audio, subtitle conversion, and text/bitmap burn-in.
-- LS-049 local playback coordinator and desktop integration with explicit capabilities, Direct Play precedence, fallback progress/error/cancel states, opaque Range output, and cleanup.
-- LS-050 client-gap evidence and ADR-0009 resolve DD-001 in favor of progressive browser HLS.
-- LS-071 through LS-074 progressive HLS generation and lifecycle, secure desktop/browser delivery, bundled HLS.js playback, and native controls with a growing seekable range.
+- Confirmed the raw Tauri executable was not a portable release: base bundling was disabled, remote browser assets were not packaged, and media operations resolved FFmpeg/ffprobe from the machine environment.
+- Kept Vue 3 + Tauri 2 + Rust; Electron was explicitly rejected because it would add a second browser runtime.
+- Added a framework-independent, bounded portable payload format with a content hash, per-file manifest, allowlisted paths, atomic extraction, tamper detection, and content-addressed application-data storage.
+- Added a separate repository-local packager so the Tauri package still has exactly one native binary target.
+- Added a checksum-verified FFmpeg 9.0.2 essentials preparation script, required encoder/filter checks, and exact license/build-information staging.
+- Added explicit absolute media-tool paths to the reusable core and verified portable-root discovery at the thin Tauri adapter.
+- Expanded first-run connection, certificate trust, pairing, endpoint, no-address, and firewall guidance without enabling LAN automatically.
+- Built `target/release/portable/LocalStream.exe` and tested the executable by itself with FFmpeg removed from `PATH`; first-run extraction, extracted tools, private HTTPS health, and browser UI were verified.
 
 ## Verification
 
-- End-to-end MKV coverage verifies Direct Play, selected-track remux, transcode, selection changes, cancellation, retry, subtitle conversion/burn-in, and playable outputs.
-- Desktop UI tests cover completed fallback URLs and cancellation/release cleanup.
+- `npm run media-tools:prepare` — PASS; prepared verified FFmpeg/ffprobe 9.0.2 inputs.
+- `npm run verify` — PASS; formatting, lint, typecheck, 50 frontend tests, and production build.
+- `cargo fmt --all -- --check` — PASS.
+- `cargo check --workspace --all-targets` — PASS.
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings` — PASS.
+- `cargo test --workspace` — PASS; 125 unit tests.
+- `npm run release:windows` — PASS; produced a 227,000,920-byte (216.48 MiB) `LocalStream.exe` with a 211,453,440-byte payload.
+- Copy-only launch with a stripped `PATH` — PASS; extracted tools executed, private HTTPS health returned `lanAvailable: true`, and the browser UI was served.
+- Final executable SHA-256: `AE05B1330131F3557B9091C521EDE9F6D44DB99BEA8ED46824F3279894802DB3`; payload SHA-256 `85abaf1ecc389fc97955529db48d52419d27dcf41aa7a6ef7014e54133a6c78a`.
 
-## Remaining
+## Follow-Up Work
 
-- Draft and accept the discovery protocol ADR.
-- Define advertisement, registry, expiry, and trust-boundary contracts.
+- A second physical Windows computer, WebView2-missing behavior, firewall UX, certificate trust, pairing, and playback remain under LS-055 qualification.
+- Old content-addressed payload directories need explicit cleanup/update UX before broad public release.
+- Signing and non-Windows portable packages are not implemented.
+- Resume Phase B with LS-032.
+
+## Assumptions
+
+- “Single EXE” means one copy-and-run portable file, not a setup executable. It necessarily extracts application-owned resources because Tauri cannot execute sidecars and serve web files from an appended payload directly.
+- The selected smaller profile requires Microsoft Edge WebView2 Runtime. It is preinstalled on Windows 11 and most supported Windows 10 systems but remains an explicit platform prerequisite.
+- The initial portable baseline targets Windows x64. It does not silently claim ARM64, 32-bit, Linux, or macOS support.
+- The pinned Gyan essentials build is GPLv3 and includes libx264/libass. Exact notices and source/build information travel in the payload, but public/commercial distribution still requires legal review.
+- LAN access remains disabled by default; certificate trust and firewall approval are explicit user actions.
 
 ## Next Exact Step
 
-Review the Phase B requirements and create the LS-032 discovery ADR.
+Resume LS-032 and draft the discovery protocol ADR.

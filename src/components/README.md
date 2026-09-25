@@ -8,7 +8,7 @@ Present accessible UI from typed props and events. Components do not own filesys
 
 The application shell groups these components into focused Library & playback, Network, and Access tabs in native mode. Browser mode keeps its bootstrap and library flow visible without native-only settings.
 
-- `FoundationStatus.vue` renders native-core availability and retry state.
+- `FoundationStatus.vue` renders native-core availability, verified portable-runtime state, and a safe portable failure message with retry state.
 - `MediaLibraryPanel.vue` renders folder-selection, scan feedback, empty state, safe media summaries, and separate Configure and Play actions.
 - `PlaybackPanel.vue` separates preview configuration from playback and requires an explicit Play action. Audio/subtitle changes stop the current preview rather than starting another one. HLS.js is preferred consistently across desktop WebView and LAN browsers; native HLS is only the compatibility fallback when Media Source Extensions are unavailable.
 - `NodeIdentityPanel.vue` keeps advanced node ID, fingerprint, trust export, and identity-reset controls in an expandable disclosure.

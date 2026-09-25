@@ -33,6 +33,14 @@ watch(
       Disabled by default. Select one explicit private address; wildcard and loopback binding are
       rejected.
     </p>
+    <p
+      v-if="draft.enabled && config && addresses.length === 0"
+      class="feedback feedback--error"
+      role="alert"
+    >
+      No private LAN address was detected. Connect this computer to the local network, then restart
+      LocalStream before enabling the server.
+    </p>
     <div class="settings-form">
       <label class="checkbox-field">
         <input v-model="draft.enabled" type="checkbox" />
@@ -67,7 +75,14 @@ watch(
         {{ isSaving ? 'Saving…' : 'Save LAN configuration' }}
       </button>
     </div>
-    <p v-if="status?.endpoint" class="feedback">{{ status.endpoint }}</p>
+    <p v-if="status?.endpoint" class="feedback" role="status">
+      Open this exact HTTPS address on the other device: {{ status.endpoint }}
+    </p>
+    <p v-else-if="status?.failure" class="feedback feedback--error" role="alert">
+      The secure LAN server did not start ({{ status.failure }}). Confirm that the selected address
+      still belongs to this computer, the port is available, and Windows Firewall allows LocalStream
+      on private networks.
+    </p>
     <p v-if="notice" class="feedback">{{ notice }}</p>
     <p v-if="error" class="feedback feedback--error" role="alert">{{ error }}</p>
   </section>

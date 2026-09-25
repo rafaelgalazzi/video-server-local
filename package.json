@@ -12,6 +12,8 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:watch": "vitest",
+    "media-tools:prepare": "powershell -NoProfile -NonInteractive -File scripts/prepare-windows-media-tools.ps1",
+    "release:windows": "tauri build --target x86_64-pc-windows-msvc --no-bundle && npm run media-tools:prepare && cargo run --release --target x86_64-pc-windows-msvc -p localstream-portable-packager",
     "build": "npm run typecheck && vite build",
     "verify": "npm run format:check && npm run lint && npm run typecheck && npm run test && npm run build"
   },

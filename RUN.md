@@ -20,6 +20,14 @@ Keep the terminal open while using LocalStream. Stop it with `Ctrl+C`.
 
 In the app, click **Choose folder** and select a folder containing MP4, MKV, WebM, MOV, or M4V videos.
 
+## Build the Portable Windows EXE
+
+```powershell
+npm run release:windows
+```
+
+Copy only `target/release/portable/LocalStream.exe` to the target Windows x64 computer. No setup or FFmpeg installation is required, but Microsoft Edge WebView2 Runtime must already be installed. The first launch verifies and extracts application-owned resources into LocalStream's application-data folder.
+
 ## Web Preview Only
 
 ```powershell
@@ -46,3 +54,5 @@ npm run tauri dev
 ```
 
 Read the first error printed in the terminal. Do not delete `Cargo.lock`, `package-lock.json`, or uncommitted files while troubleshooting.
+
+For `LocalStream.exe`, first confirm that Microsoft Edge WebView2 Runtime is installed and that the current Windows user can write to LocalStream's application-data directory. Do not copy the raw `target/x86_64-pc-windows-msvc/release/localstream-app.exe`; it is not a portable release.

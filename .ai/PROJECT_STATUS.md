@@ -2,7 +2,7 @@
 
 ## Last Updated
 
-2026-08-19
+2026-09-25
 
 ## Current Milestone
 
@@ -64,34 +64,35 @@ Phase B: Discovery and native pairing.
 - Confirmed local database clearing transactionally removes indexed media, preferences, sessions, and trusted peers without deleting media files, node identity, or LAN configuration.
 - Progressive HLS starts from early segments, stream-copies H.264 video, converts selected/default audio to AAC, and uses full x264 only for incompatible video.
 - MKV playback uses only the native player timeline; its seekable range grows as progressive HLS segments become available.
+- LS-075 produces one copy-and-run Windows x64 `LocalStream.exe`; it embeds the remote Vue assets, FFmpeg 9.0.2/ffprobe, and exact GPL notices in a hash-trailer payload.
+- Portable payload activation is bounded and fail-closed: it validates the x64 PE base, allowlists regular paths/files, rejects traversal/duplicates/symlinks and excessive size/count, verifies base/payload hashes plus the embedded manifest, repairs rewritten local extractions, stages atomically, and uses the full payload digest.
+- The desktop adapter supplies extracted absolute media-tool paths to the core, and the portable build was copy-only launched with FFmpeg absent from `PATH`; private HTTPS health and the remote browser UI were verified.
+- Connection guidance now covers explicit private-address enablement, restart, full-fingerprint certificate trust, endpoint use, pairing approval, no-address detection, and firewall failures; portable failures are visible in native status and disable packaged media/LAN assets without machine-tool fallback.
 
 ## In Progress
 
-- LS-032 discovery protocol ADR and service contract begins Phase B.
+- None. LS-075 completed the corrective portable release baseline; LS-032 remains the next planned task.
 
 ## Not Started
 
 - Node discovery, pairing, trust, and distributed libraries.
 - Node discovery advertisement and bounded registry implementation.
-- Automated tests, CI, packaging, and platform verification.
+- CI, non-Windows packaging, signing, and broader platform verification.
 
 ## Known Major Limitations
 
-- Release bundling and installer behavior is unknown / not verified.
-- The current local Node.js 22.12 environment is below one transitive lint dependency's declared minimum of 22.13, although verification executed successfully.
+- The Windows portable profile is x64-only and requires Microsoft Edge WebView2 Runtime; it is not a no-prerequisite operating-system-independent binary.
+- The portable file is approximately 216 MiB and uses roughly 211 MiB of application-data storage; old content-addressed payload versions do not have cleanup UX yet.
+- A second physical Windows computer, signing, upgrade/retention behavior, and real firewall/certificate/pairing/playback flows remain unverified.
+- The bundled FFmpeg 9.0.2 essentials build is GPLv3; public/commercial distribution requires preservation/review of exact source, build, and license obligations.
 - The standalone scanner remains extension-based; desktop persisted scans inspect compatibility metadata with ffprobe.
 - Rescans replace the full stored snapshot rather than updating incrementally.
-- HTTP and Direct Play are loopback-only on an ephemeral port until pairing/authentication is implemented.
 - Direct Play supports one byte range per request; multipart ranges and conditional caching are not implemented.
-- Physical browser/device playback of fallback output is not yet verified outside automated local fixtures.
+- Physical browser/device playback of fallback output is not yet verified outside automated local fixtures and the local HTTPS UI smoke check.
 - Pairing requests are intentionally memory-only and disappear on restart.
-- Native client secret storage is not implemented.
-- Physical second-device certificate installation, browser onboarding, and playback are not verified.
-- Authenticated unsafe HLS methods require exact same-origin validation and a double-submit CSRF token.
-- LS-014 through LS-031 changes remain uncommitted in the working tree.
 
 ## Next Major Goal
 
-Start LS-032 discovery protocol ADR and service contract.
+Resume LS-032 discovery protocol ADR and service contract.
 
 The dependency-ordered remaining backlog is maintained in [IMPLEMENTATION_ROADMAP.md](IMPLEMENTATION_ROADMAP.md). The committed completion target is the release-ready desktop LAN MVP through LS-060; post-MVP work is gated and must not silently resolve deferred architecture decisions.

@@ -1,5 +1,10 @@
 [workspace]
-members = ["crates/localstream-core", "src-tauri"]
+members = [
+    "crates/localstream-core",
+    "crates/localstream-portable-payload",
+    "src-tauri",
+    "tools/portable-packager",
+]
 resolver = "2"
 
 [workspace.package]

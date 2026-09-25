@@ -6,8 +6,8 @@ Discover and invoke FFmpeg tools without shell interpolation while keeping proce
 
 ## Features
 
-- Explicit path configuration with `LOCALSTREAM_FFPROBE_PATH` and `LOCALSTREAM_FFMPEG_PATH`.
-- Development fallback to `ffprobe` and `ffmpeg` on `PATH`.
+- Explicit absolute path construction for packaged distributions and environment configuration with `LOCALSTREAM_FFPROBE_PATH` / `LOCALSTREAM_FFMPEG_PATH`.
+- Desktop adapters can supply bundled sidecar paths; those explicit distribution paths take precedence. Unpackaged development and headless launchers use `LOCALSTREAM_FFPROBE_PATH` / `LOCALSTREAM_FFMPEG_PATH`, then `PATH`.
 - Executable identity validation through a bounded `-version` invocation.
 - Structured `OsString` arguments, timeout, cooperative cancellation, kill-on-drop, and bounded stdout/stderr capture.
 
@@ -18,6 +18,7 @@ Discover and invoke FFmpeg tools without shell interpolation while keeping proce
 
 ## Public Interfaces
 
+- `MediaToolPaths::from_paths`: creates an absolute packaged tool-path pair.
 - `MediaToolPaths::discover`: resolves and validates both required tools.
 - `ProcessRunner::run`: executes one bounded structured process request.
 - `ProcessRequest`: owns the executable, arguments, timeout, and output limits.
@@ -28,7 +29,7 @@ Tokio owns asynchronous child processes and pipes. `tokio-util` provides cancell
 
 ## Limitations
 
-Release packaging does not yet bundle FFmpeg. Operators must install compatible tools on `PATH` or configure absolute paths. Tool-version policy is identity-based for now; minimum supported versions will be set from compatibility evidence.
+The Windows x64 portable packager embeds a pinned FFmpeg 9.0.2 essentials distribution and copies its exact notices; Linux, macOS, and headless packaging still require an explicit acquisition and licensing policy. Tool-version policy is identity-based for now; minimum supported versions will be set from compatibility evidence.
 
 ## Planned Work
 

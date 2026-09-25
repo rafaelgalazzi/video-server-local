@@ -22,7 +22,7 @@ LocalStream is planned as a local-first system with a Vue interface and thin tra
         SQLite         FFmpeg           mDNS
 ```
 
-The Vue/Tauri adapters, shared Rust core, library scanning, SQLite persistence, bounded Direct Play/WebVTT delivery, track preferences, compatibility decisions, bounded remux/transcode jobs, local playback fallback, private-PKI HTTPS, pairing, browser sessions, and audited LAN exposure exist. Discovery remains unimplemented.
+The Vue/Tauri adapters, shared Rust core, library scanning, SQLite persistence, bounded Direct Play/WebVTT delivery, track preferences, compatibility decisions, bounded remux/transcode jobs, local playback fallback, private-PKI HTTPS, pairing, browser sessions, audited LAN exposure, and the verified Windows single-file portable payload exist. Discovery remains unimplemented.
 
 ## Responsibilities
 
@@ -30,7 +30,8 @@ The Vue/Tauri adapters, shared Rust core, library scanning, SQLite persistence, 
 - Tauri commands: native UI transport adapters; no business logic.
 - HTTP handlers: versioned LAN transport adapters, static web hosting, and streaming responses; no duplicated business logic.
 - Rust core: approved-library management, media scanning, persistence, bounded streaming, discovery, pairing, security, FFmpeg integration, and shared domain types.
-- Platform layer: isolated filesystem selection, lifecycle, permissions, and OS-specific integrations.
+- Portable payload crate: bounded archive creation/activation, content hashes, safe extraction, and application-owned runtime storage without Tauri dependencies.
+- Platform layer: isolated filesystem selection, lifecycle, permissions, packaging inputs, and OS-specific integrations.
 
 ## Primary Flow
 

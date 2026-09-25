@@ -86,6 +86,14 @@ pub struct LocalStreamCore {
     pairing_rate_limiter: auth::PairingRateLimiter,
     stream_permits: std::sync::Arc<tokio::sync::Semaphore>,
     subtitle_permits: std::sync::Arc<tokio::sync::Semaphore>,
+    media_tools: MediaToolSource,
+}
+
+#[derive(Debug)]
+enum MediaToolSource {
+    Environment,
+    Packaged(media_tools::MediaToolPaths),
+    Unavailable,
 }
 
 const MAX_CONCURRENT_STREAMS: usize = 8;
@@ -109,10 +117,48 @@ pub enum IdentityResetError {
     StoreUnavailable,
 }
 
+fn unavailable_media_tool(tool: &'static str) -> media_tools::ToolDiscoveryError {
+    media_tools::ToolDiscoveryError::Unavailable {
+        tool,
+        source: media_tools::ProcessError::Spawn(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "packaged media tools are unavailable",
+        )),
+    }
+}
+
 impl LocalStreamCore {
     pub fn open(database_path: impl AsRef<std::path::Path>) -> Result<Self, DatabaseError> {
+        Self::open_inner(database_path.as_ref(), MediaToolSource::Environment)
+    }
+
+    /// Opens the core with distribution-owned media tools.
+    ///
+    /// Desktop launchers use this for packaged sidecars, while headless and test
+    /// launchers can continue to use the environment/`PATH` discovery policy.
+    pub fn open_with_media_tool_paths(
+        database_path: impl AsRef<std::path::Path>,
+        media_tools: media_tools::MediaToolPaths,
+    ) -> Result<Self, DatabaseError> {
+        Self::open_inner(
+            database_path.as_ref(),
+            MediaToolSource::Packaged(media_tools),
+        )
+    }
+
+    /// Opens a core that fails media operations closed without consulting the machine.
+    pub fn open_with_disabled_media_tools(
+        database_path: impl AsRef<std::path::Path>,
+    ) -> Result<Self, DatabaseError> {
+        Self::open_inner(database_path.as_ref(), MediaToolSource::Unavailable)
+    }
+
+    fn open_inner(
+        database_path: &std::path::Path,
+        media_tools: MediaToolSource,
+    ) -> Result<Self, DatabaseError> {
         Ok(Self {
-            database: database::LibraryDatabase::open(database_path.as_ref())?,
+            database: database::LibraryDatabase::open(database_path)?,
             pairing: auth::PairingService::default(),
             pairing_rate_limiter: auth::PairingRateLimiter::default(),
             stream_permits: std::sync::Arc::new(tokio::sync::Semaphore::new(
@@ -121,6 +167,7 @@ impl LocalStreamCore {
             subtitle_permits: std::sync::Arc::new(tokio::sync::Semaphore::new(
                 MAX_CONCURRENT_SUBTITLE_EXTRACTIONS,
             )),
+            media_tools,
         })
     }
 
@@ -136,6 +183,7 @@ impl LocalStreamCore {
             subtitle_permits: std::sync::Arc::new(tokio::sync::Semaphore::new(
                 MAX_CONCURRENT_SUBTITLE_EXTRACTIONS,
             )),
+            media_tools: MediaToolSource::Environment,
         })
     }
 
@@ -146,6 +194,30 @@ impl LocalStreamCore {
             version: env!("CARGO_PKG_VERSION"),
             local_first: true,
         }
+    }
+
+    async fn ffprobe_path(&self) -> Result<std::path::PathBuf, media_tools::ToolDiscoveryError> {
+        let tools = match &self.media_tools {
+            MediaToolSource::Environment => {
+                return media_tools::MediaToolPaths::discover_ffprobe().await;
+            }
+            MediaToolSource::Packaged(tools) => tools,
+            MediaToolSource::Unavailable => return Err(unavailable_media_tool("ffprobe")),
+        };
+        media_tools::validate_tool(tools.ffprobe(), "ffprobe").await?;
+        Ok(tools.ffprobe().to_owned())
+    }
+
+    async fn ffmpeg_path(&self) -> Result<std::path::PathBuf, media_tools::ToolDiscoveryError> {
+        let tools = match &self.media_tools {
+            MediaToolSource::Environment => {
+                return media_tools::MediaToolPaths::discover_ffmpeg().await;
+            }
+            MediaToolSource::Packaged(tools) => tools,
+            MediaToolSource::Unavailable => return Err(unavailable_media_tool("ffmpeg")),
+        };
+        media_tools::validate_tool(tools.ffmpeg(), "ffmpeg").await?;
+        Ok(tools.ffmpeg().to_owned())
     }
 
     pub fn scan_library(
@@ -169,7 +241,7 @@ impl LocalStreamCore {
         approved_directory: impl AsRef<std::path::Path>,
         cancellation: tokio_util::sync::CancellationToken,
     ) -> Result<LibraryScan, CoreError> {
-        let ffprobe = media_tools::MediaToolPaths::discover_ffprobe().await?;
+        let ffprobe = self.ffprobe_path().await?;
         let mut scan = media::scan_approved_directory_records(approved_directory.as_ref())?;
         for media in &mut scan.items {
             match media_tools::probe_media(
@@ -295,7 +367,8 @@ impl LocalStreamCore {
                 return Err(remux::RemuxError::UnsupportedSubtitleDelivery)
             }
         };
-        let ffmpeg = media_tools::MediaToolPaths::discover_ffmpeg()
+        let ffmpeg = self
+            .ffmpeg_path()
             .await
             .map_err(|_| remux::RemuxError::Unavailable)?;
         remux::submit(
@@ -390,7 +463,8 @@ impl LocalStreamCore {
         } else {
             None
         };
-        let ffmpeg = media_tools::MediaToolPaths::discover_ffmpeg()
+        let ffmpeg = self
+            .ffmpeg_path()
             .await
             .map_err(|_| transcode::TranscodeError::Unavailable)?;
         transcode::submit(
@@ -457,7 +531,8 @@ impl LocalStreamCore {
                     .ok_or(hls::HlsError::InvalidTrack)
             })
             .transpose()?;
-        let ffmpeg = media_tools::MediaToolPaths::discover_ffmpeg()
+        let ffmpeg = self
+            .ffmpeg_path()
             .await
             .map_err(|_| hls::HlsError::Unavailable)?;
         hls::submit(
@@ -579,7 +654,8 @@ impl LocalStreamCore {
         if path == root || !path.starts_with(&root) {
             return Err(SubtitleDeliveryError::OutsideApprovedLibrary);
         }
-        let ffmpeg = media_tools::MediaToolPaths::discover_ffmpeg()
+        let ffmpeg = self
+            .ffmpeg_path()
             .await
             .map_err(|_| SubtitleDeliveryError::Unavailable)?;
         let mapping = format!("0:{}", source.source_index);
@@ -711,7 +787,7 @@ mod tests {
 
     use tempfile::tempdir;
 
-    use super::LocalStreamCore;
+    use super::{LocalStreamCore, MediaToolSource};
 
     #[derive(Default)]
     struct ResetStore {
@@ -748,7 +824,29 @@ mod tests {
             subtitle_permits: Arc::new(tokio::sync::Semaphore::new(
                 super::MAX_CONCURRENT_SUBTITLE_EXTRACTIONS,
             )),
+            media_tools: MediaToolSource::Environment,
         }
+    }
+
+    #[tokio::test]
+    async fn disabled_media_tools_do_not_consult_the_machine() {
+        let workspace = tempdir().expect("temporary workspace should exist");
+        let core = LocalStreamCore::open_with_disabled_media_tools(
+            workspace.path().join("localstream.sqlite3"),
+        )
+        .expect("database should open");
+
+        assert!(matches!(
+            core.ffprobe_path().await,
+            Err(crate::media_tools::ToolDiscoveryError::Unavailable {
+                tool: "ffprobe",
+                ..
+            })
+        ));
+        assert!(matches!(
+            core.ffmpeg_path().await,
+            Err(crate::media_tools::ToolDiscoveryError::Unavailable { tool: "ffmpeg", .. })
+        ));
     }
 
     #[test]

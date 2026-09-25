@@ -1,8 +1,13 @@
-use std::sync::Arc;
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use localstream_core::{AppInfo, LocalStreamCore};
 use tauri::Manager;
 use tauri_plugin_dialog::DialogExt;
+
+pub mod portable;
 
 struct LanRuntime {
     config_store: localstream_core::lan::FileLanConfigStore,
@@ -11,9 +16,75 @@ struct LanRuntime {
     _server: std::sync::Mutex<Option<localstream_core::server::HttpsServerHandle>>,
 }
 
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PortableRuntimeStatus {
+    state: &'static str,
+    failure: Option<&'static str>,
+}
+
+fn portable_failure_code(error: &portable::PortableError) -> &'static str {
+    match error {
+        portable::PortableError::HashMismatch => "integrity_check_failed",
+        portable::PortableError::UnsafeArchivePath
+        | portable::PortableError::DuplicateEntry
+        | portable::PortableError::UnsupportedEntry
+        | portable::PortableError::UnsafeExtractionDirectory => "unsafe_payload_rejected",
+        portable::PortableError::PayloadTooLarge | portable::PortableError::ResourceTooLarge => {
+            "payload_limit_exceeded"
+        }
+        portable::PortableError::MalformedPayload
+        | portable::PortableError::InvalidInstallation => "payload_incomplete",
+        portable::PortableError::Io { .. } => "storage_unavailable",
+        portable::PortableError::EmptyResourceList
+        | portable::PortableError::IncompleteResourceSet
+        | portable::PortableError::UnsafeBuildPath
+        | portable::PortableError::NestedPortableExecutable
+        | portable::PortableError::UnsupportedBaseExecutable
+        | portable::PortableError::TooManyEntries => "invalid_build",
+    }
+}
+
+fn media_tool_file_name(name: &str) -> PathBuf {
+    if cfg!(windows) {
+        PathBuf::from(format!("{name}.exe"))
+    } else {
+        PathBuf::from(name)
+    }
+}
+
+fn packaged_media_tool_paths_in(
+    directory: &Path,
+) -> Option<localstream_core::media_tools::MediaToolPaths> {
+    let ffprobe = directory.join(media_tool_file_name("ffprobe"));
+    let ffmpeg = directory.join(media_tool_file_name("ffmpeg"));
+    if !is_safe_media_tool_file(&ffprobe) || !is_safe_media_tool_file(&ffmpeg) {
+        return None;
+    }
+    localstream_core::media_tools::MediaToolPaths::from_paths(ffprobe, ffmpeg).ok()
+}
+
+fn is_safe_media_tool_file(path: &Path) -> bool {
+    std::fs::symlink_metadata(path)
+        .is_ok_and(|metadata| metadata.is_file() && !metadata.file_type().is_symlink())
+}
+
+fn configured_media_tool_paths(
+    portable_root: Option<&Path>,
+) -> Option<localstream_core::media_tools::MediaToolPaths> {
+    portable_root.and_then(packaged_media_tool_paths_in)
+}
+
 #[tauri::command]
 fn app_info(core: tauri::State<'_, Arc<LocalStreamCore>>) -> AppInfo {
     core.app_info()
+}
+
+#[tauri::command]
+fn portable_runtime_status(
+    status: tauri::State<'_, PortableRuntimeStatus>,
+) -> PortableRuntimeStatus {
+    status.inner().clone()
 }
 
 #[tauri::command]
@@ -268,9 +339,26 @@ pub fn run() {
         .setup(|app| {
             let app_data = app.path().app_data_dir()?;
             std::fs::create_dir_all(&app_data)?;
+            let (portable_root, portable_state, portable_failure) =
+                match portable::activate_from_current_executable(&app_data) {
+                    Ok(Some(root)) => (Some(root), "ready", None),
+                    Ok(None) => (None, "not-portable", None),
+                    Err(error) => (None, "failed", Some(portable_failure_code(&error))),
+                };
+            let portable_status = PortableRuntimeStatus {
+                state: portable_state,
+                failure: portable_failure,
+            };
+            let database_path = app_data.join("localstream.sqlite3");
             let core = Arc::new(
-                LocalStreamCore::open(app_data.join("localstream.sqlite3"))
-                    .map_err(std::io::Error::other)?,
+                if let Some(media_tools) = configured_media_tool_paths(portable_root.as_deref()) {
+                    LocalStreamCore::open_with_media_tool_paths(database_path, media_tools)
+                } else if portable_root.is_some() || portable_failure.is_some() {
+                    LocalStreamCore::open_with_disabled_media_tools(database_path)
+                } else {
+                    LocalStreamCore::open(database_path)
+                }
+                .map_err(std::io::Error::other)?,
             );
             let identity_store =
                 localstream_core::node_identity::KeyringNodeSecretStore::new("desktop-default")
@@ -305,7 +393,10 @@ pub fn run() {
             .map_err(std::io::Error::other)?;
             let mut lan_server = None;
             if lan_config.enabled {
-                let asset_root = app.path().resource_dir()?.join("web");
+                let asset_root = portable_root.as_ref().map_or_else(
+                    || app.path().resource_dir().map(|root| root.join("web")),
+                    |root| Ok(root.join("web")),
+                )?;
                 let result = localstream_core::server::BrowserAssets::from_directory(asset_root)
                     .map_err(|_| localstream_core::server::HttpsServerError::ListenerUnavailable)
                     .and_then(|assets| {
@@ -350,6 +441,7 @@ pub fn run() {
                 ),
             )?;
             app.manage(core);
+            app.manage(portable_status);
             app.manage(playback);
             app.manage(identity_summary);
             app.manage(identity_store);
@@ -372,6 +464,7 @@ pub fn run() {
             node_identity,
             pending_pairings,
             playback_job,
+            portable_runtime_status,
             prepare_playback,
             prepare_hls,
             reject_pairing,
@@ -390,4 +483,22 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("failed to run LocalStream");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::media_tool_file_name;
+
+    #[test]
+    fn sidecar_names_use_the_target_platform_extension() {
+        let expected = if cfg!(windows) {
+            "ffmpeg.exe"
+        } else {
+            "ffmpeg"
+        };
+        assert_eq!(
+            media_tool_file_name("ffmpeg"),
+            std::path::PathBuf::from(expected)
+        );
+    }
 }

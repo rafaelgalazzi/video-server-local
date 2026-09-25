@@ -1,0 +1,9 @@
+[package]
+name = "localstream-portable-packager"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+localstream-portable-payload = { path = "../../crates/localstream-portable-payload" }

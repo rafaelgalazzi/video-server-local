@@ -30,6 +30,8 @@ The crate exposes application identity information, scans explicitly approved vi
 - `AppInfo`: serializable application identity value.
 - `LocalStreamCore::scan_library`: approved-directory scan entry point.
 - `LocalStreamCore::scan_and_persist_library`: atomic scan-and-store operation.
+- `LocalStreamCore::open_with_media_tool_paths`: opens a core with distribution-owned absolute FFmpeg/ffprobe paths while preserving per-operation identity validation.
+- `LocalStreamCore::open_with_disabled_media_tools`: fails media operations closed without consulting machine executables when a packaged runtime is unavailable.
 - `LocalStreamCore::current_library`: safe persisted-library view.
 - `server::start_local_server`: embedded loopback HTTP lifecycle.
 - `LocalStreamCore::open_direct_play`: bounded Direct Play source resolution.
@@ -43,7 +45,7 @@ Axum and Tokio for the embedded server, bundled SQLite through rusqlite, Serde f
 
 ## Current Limitations
 
-Discovery and headless protected storage are not implemented. Direct Play and completed fallbacks support single byte ranges; completed transform reservations require explicit release. Rescans replace a complete library snapshot, and release packaging does not yet bundle FFmpeg tools.
+Discovery and headless protected storage are not implemented. Direct Play and completed fallbacks support single byte ranges; completed transform reservations require explicit release. Rescans replace a complete library snapshot. Windows packaging supplies explicit bundled media-tool paths, while Linux/macOS and headless distributions still require their own tool-acquisition policy.
 
 ## Planned Work
 

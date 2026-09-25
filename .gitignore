@@ -2,6 +2,10 @@ node_modules/
 dist/
 target/
 src-tauri/gen/
+/src-tauri/binaries/*
+!/src-tauri/binaries/README.md
+/src-tauri/generated/ffmpeg/*
+!/src-tauri/generated/ffmpeg/README.md
 *.log
 .DS_Store
 .idea/

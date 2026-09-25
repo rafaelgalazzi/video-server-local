@@ -7,6 +7,7 @@ Own reusable Vue-native state and coordinate typed backend adapters without intr
 ## Features
 
 - `useAppInfo`: loads application metadata through an injectable adapter and exposes derived runtime state.
+- `usePortableRuntime`: loads safe portable-payload readiness/failure state for visible native diagnostics.
 - `useMediaLibrary`: restores persisted library state and coordinates approved-folder selection and safe scan results.
 - `useServerStatus`: loads the embedded HTTP server's safe address and exposure state.
 - `useNodeIdentity`: loads the trusted-local public identity and coordinates root export and confirmation-based reset.

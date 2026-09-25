@@ -10,7 +10,7 @@ The shell creates the main window, initializes the database-backed core and prot
 
 ## Important Files
 
-- `tauri.conf.json`: desktop shell and build configuration.
+- `tauri.conf.json`: desktop shell and base build configuration.
 - `capabilities/default.json`: baseline main-window permissions.
 - `icons/app-icon.svg`: editable source for generated platform icons.
 - `src/lib.rs`: application builder and command registration.
@@ -18,15 +18,15 @@ The shell creates the main window, initializes the database-backed core and prot
 
 ## Public Interfaces
 
-Tauri commands `app_info`, `server_info`, and `node_identity` return safe runtime metadata. `current_library` loads the safe persisted view, `clear_local_database` delegates confirmed local-data clearing, and track commands delegate validated preferences. `prepare_playback`, `playback_job`, `cancel_playback`, and `release_playback` are thin adapters to the reusable local playback coordinator.
+Tauri commands `app_info`, `portable_runtime_status`, `server_info`, and `node_identity` return safe runtime metadata. `current_library` loads the safe persisted view, `clear_local_database` delegates confirmed local-data clearing, and track commands delegate validated preferences. `prepare_playback`, `playback_job`, `cancel_playback`, and `release_playback` are thin adapters to the reusable local playback coordinator.
 
 ## Dependencies
 
-Tauri 2 and the workspace-local `localstream-core` crate.
+Tauri 2 plus the workspace-local `localstream-core` and `localstream-portable-payload` crates. The portable payload module is framework-independent; the Tauri adapter supplies its verified extracted root without making the core depend on Tauri.
 
 ## Current Limitations
 
-Release installer behavior, firewall UX, mobile projects, and physical second-device trust onboarding remain unverified.
+The Windows portable profile is x64-only and requires Microsoft Edge WebView2 Runtime. It extracts roughly 211 MiB into application data on first launch, does not yet clean old payload versions, and still requires physical second-device trust/firewall qualification.
 
 ## Planned Work
 

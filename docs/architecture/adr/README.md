@@ -30,6 +30,7 @@ Proposed / Accepted / Superseded / Rejected
 
 ## Index
 
+- [ADR-0010 — Single-file Windows portable release](0010-self-contained-windows-release.md)
 - [ADR-0009 — Progressive HLS fallback](0009-progressive-hls-fallback.md)
 - [ADR-0008 — External FFmpeg process boundary](0008-external-ffmpeg-process-boundary.md)
 - [ADR-0001 — Rust native/core backend](0001-rust-core.md)

@@ -20,11 +20,34 @@ const VERSION_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MediaToolPaths {
-    pub ffprobe: PathBuf,
-    pub ffmpeg: PathBuf,
+    ffprobe: PathBuf,
+    ffmpeg: PathBuf,
 }
 
 impl MediaToolPaths {
+    /// Creates an explicit tool-path pair for a packaged distribution.
+    ///
+    /// Both paths must be absolute. Executable identity is still checked before
+    /// each media operation by the discovery helpers in the core facade.
+    pub fn from_paths(
+        ffprobe: impl Into<PathBuf>,
+        ffmpeg: impl Into<PathBuf>,
+    ) -> Result<Self, ToolDiscoveryError> {
+        let ffprobe = configured_tool(Some(ffprobe.into().into_os_string()), "ffprobe")?;
+        let ffmpeg = configured_tool(Some(ffmpeg.into().into_os_string()), "ffmpeg")?;
+        Ok(Self { ffprobe, ffmpeg })
+    }
+
+    #[must_use]
+    pub fn ffprobe(&self) -> &Path {
+        &self.ffprobe
+    }
+
+    #[must_use]
+    pub fn ffmpeg(&self) -> &Path {
+        &self.ffmpeg
+    }
+
     pub async fn discover_ffprobe() -> Result<PathBuf, ToolDiscoveryError> {
         let ffprobe = configured_tool(std::env::var_os(FFPROBE_PATH_ENV), "ffprobe")?;
         validate_tool(&ffprobe, "ffprobe").await?;
@@ -77,7 +100,10 @@ fn configured_tool(value: Option<OsString>, fallback: &str) -> Result<PathBuf, T
     }
 }
 
-async fn validate_tool(path: &Path, expected_name: &'static str) -> Result<(), ToolDiscoveryError> {
+pub(crate) async fn validate_tool(
+    path: &Path,
+    expected_name: &'static str,
+) -> Result<(), ToolDiscoveryError> {
     let request = ProcessRequest::new(path)
         .arg("-version")
         .timeout(VERSION_TIMEOUT)
@@ -377,6 +403,16 @@ mod tests {
         )
         .await
         .expect_err("configured paths must be absolute");
+        assert!(matches!(
+            error,
+            super::ToolDiscoveryError::RelativeConfiguredPath
+        ));
+    }
+
+    #[test]
+    fn explicit_packaged_paths_must_be_absolute() {
+        let error = MediaToolPaths::from_paths("ffprobe.exe", "ffmpeg.exe")
+            .expect_err("packaged tool paths must be absolute");
         assert!(matches!(
             error,
             super::ToolDiscoveryError::RelativeConfiguredPath
